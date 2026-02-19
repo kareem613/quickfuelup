@@ -467,7 +467,6 @@ export default function NewEntryPage() {
         <div className="row">
           <strong>4) Extract</strong>
           <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
-            <span className="muted">{imageBusy ? 'Processing…' : extractBusy ? 'Extracting…' : 'Waiting'}</span>
             <button
               className="btn small"
               disabled={!canExtract || extractBusy || submitBusy}
