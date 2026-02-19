@@ -155,6 +155,7 @@ export default function NewEntryPage() {
   }
 
   const canExtract = Boolean(draft.vehicleId && draft.pumpImage && draft.odometerImage)
+  const canEditDetails = Boolean(draft.vehicleId)
   const form = draft.form ?? { isfilltofull: true, missedfuelup: false }
 
   const step1Done = Boolean(draft.vehicleId)
@@ -191,6 +192,14 @@ export default function NewEntryPage() {
   useEffect(() => {
     if (!cfg) return
     if (!canExtract) return
+    // Don't auto-overwrite if the user has started entering values manually.
+    if (
+      typeof form.odometer === 'number' ||
+      typeof form.fuelconsumed === 'number' ||
+      typeof form.cost === 'number'
+    ) {
+      return
+    }
     if (imageBusy || extractBusy || submitBusy) return
     if (draft.extracted) return
 
@@ -489,9 +498,9 @@ export default function NewEntryPage() {
         )}
       </div>
 
-      <div className="card stack" style={{ opacity: canExtract ? 1 : 0.6 }}>
+      <div className="card stack" style={{ opacity: canEditDetails ? 1 : 0.6 }}>
         <div className="row">
-          <strong>4) Extract</strong>
+          <strong>4) Fueling</strong>
           <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
             <button
               className="btn small"
@@ -500,7 +509,18 @@ export default function NewEntryPage() {
                 lastExtractSigRef.current = ''
                 setExtractFailed(false)
                 setExtractLlmMessage(null)
-                setDraft((d) => ({ ...d, extracted: undefined }))
+                setDraft((d) => ({
+                  ...d,
+                  extracted: undefined,
+                  form: {
+                    ...(d.form ?? { isfilltofull: true, missedfuelup: false }),
+                    odometer: undefined,
+                    fuelconsumed: undefined,
+                    cost: undefined,
+                    isfilltofull: d.form?.isfilltofull ?? true,
+                    missedfuelup: d.form?.missedfuelup ?? false,
+                  },
+                }))
               }}
               type="button"
               aria-label="Retry extraction"
@@ -534,7 +554,7 @@ export default function NewEntryPage() {
                 form: { ...form, odometer: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
               }))
             }}
-            disabled={!canExtract || submitBusy}
+            disabled={!canEditDetails || submitBusy}
           />
         </div>
 
@@ -551,7 +571,7 @@ export default function NewEntryPage() {
                   form: { ...form, fuelconsumed: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
                 }))
               }}
-              disabled={!canExtract || submitBusy}
+              disabled={!canEditDetails || submitBusy}
             />
           </div>
           <div className="field">
@@ -566,13 +586,13 @@ export default function NewEntryPage() {
                   form: { ...form, cost: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
                 }))
               }}
-              disabled={!canExtract || submitBusy}
+              disabled={!canEditDetails || submitBusy}
             />
           </div>
         </div>
       </div>
 
-      <div className="card stack" style={{ opacity: canExtract ? 1 : 0.6 }}>
+      <div className="card stack" style={{ opacity: canEditDetails ? 1 : 0.6 }}>
         <div className="row">
           <strong>5) Details</strong>
           <span className="muted">{draft.date}</span>
@@ -590,25 +610,25 @@ export default function NewEntryPage() {
 
         <div className="row" style={{ justifyContent: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
           <label className="row" style={{ justifyContent: 'flex-start', gap: 8 }}>
-            <input
-              type="checkbox"
-              checked={Boolean(form.isfilltofull)}
-              onChange={(e) => setDraft((d) => ({ ...d, form: { ...form, isfilltofull: e.target.checked, missedfuelup: form.missedfuelup } }))}
-              disabled={!canExtract || submitBusy}
-            />
-            <span>Fill to full</span>
-          </label>
+              <input
+                type="checkbox"
+                checked={Boolean(form.isfilltofull)}
+                onChange={(e) => setDraft((d) => ({ ...d, form: { ...form, isfilltofull: e.target.checked, missedfuelup: form.missedfuelup } }))}
+                disabled={!canEditDetails || submitBusy}
+              />
+              <span>Fill to full</span>
+            </label>
 
           <label className="row" style={{ justifyContent: 'flex-start', gap: 8 }}>
-            <input
-              type="checkbox"
-              checked={Boolean(form.missedfuelup)}
-              onChange={(e) => setDraft((d) => ({ ...d, form: { ...form, missedfuelup: e.target.checked, isfilltofull: form.isfilltofull } }))}
-              disabled={!canExtract || submitBusy}
-            />
-            <span>Missed fuel-up</span>
-          </label>
-        </div>
+              <input
+                type="checkbox"
+                checked={Boolean(form.missedfuelup)}
+                onChange={(e) => setDraft((d) => ({ ...d, form: { ...form, missedfuelup: e.target.checked, isfilltofull: form.isfilltofull } }))}
+                disabled={!canEditDetails || submitBusy}
+              />
+              <span>Missed fuel-up</span>
+            </label>
+          </div>
 
         <div className="field">
           <label>Notes (optional)</label>
@@ -616,7 +636,7 @@ export default function NewEntryPage() {
             rows={2}
             value={form.notes ?? ''}
             onChange={(e) => setDraft((d) => ({ ...d, form: { ...form, notes: e.target.value, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup } }))}
-            disabled={!canExtract || submitBusy}
+            disabled={!canEditDetails || submitBusy}
           />
         </div>
 
