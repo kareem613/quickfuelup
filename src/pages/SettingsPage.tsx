@@ -2,7 +2,28 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { loadConfig, saveConfig } from '../lib/config'
 import type { AppConfig } from '../lib/types'
-import { whoAmI } from '../lib/lubelogger'
+
+function safeStringify(value: unknown) {
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
+
+function formatError(e: unknown) {
+  if (e instanceof Error) {
+    return [
+      `name: ${e.name}`,
+      `message: ${e.message}`,
+      e.cause ? `cause: ${safeStringify(e.cause)}` : null,
+      e.stack ? `stack:\n${e.stack}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+  return `error: ${safeStringify(e)}`
+}
 
 export default function SettingsPage() {
   const navigate = useNavigate()
@@ -27,19 +48,78 @@ export default function SettingsPage() {
         lubeLoggerApiKey: lubeLoggerApiKey.trim(),
         geminiApiKey: geminiApiKey.trim(),
         cultureInvariant,
-         useProxy,
-       }
-     : null
+        useProxy,
+      }
+    : null
+
+  function resolveWhoamiUrl(useProxyOverride: boolean) {
+    if (!cfg) return null
+    if (useProxyOverride) return new URL('/api/lubelogger/whoami', window.location.origin).toString()
+    return `${cfg.baseUrl.replace(/\/+$/, '')}/api/whoami`
+  }
+
+  async function testWhoami(useProxyOverride: boolean) {
+    if (!cfg) return
+    const url = resolveWhoamiUrl(useProxyOverride)
+    if (!url) return
+
+    const headers: Record<string, string> = {
+      'x-api-key': cfg.lubeLoggerApiKey,
+    }
+    if (cfg.cultureInvariant) headers['culture-invariant'] = '1'
+
+    try {
+      const res = await fetch(url, { headers })
+      const text = await res.text()
+      const details = [
+        `url: ${url}`,
+        `status: ${res.status} ${res.statusText}`,
+        `headers: ${Array.from(res.headers.entries())
+          .map(([k, v]) => `${k}: ${v}`)
+          .join('; ')}`,
+        `body: ${text}`,
+      ].join('\n')
+
+      if (!res.ok) throw new Error(`HTTP error\n${details}`)
+
+      let parsed: unknown = text
+      try {
+        parsed = JSON.parse(text)
+      } catch {
+        // keep as text
+      }
+
+      setTestResult(
+        [
+          `OK (${useProxyOverride ? 'via proxy' : 'direct'})`,
+          `url: ${url}`,
+          `whoami: ${safeStringify(parsed)}`,
+        ].join('\n'),
+      )
+    } catch (e) {
+      setTestResult(
+        [
+          `FAIL (${useProxyOverride ? 'via proxy' : 'direct'})`,
+          `url: ${url}`,
+          `online: ${String(navigator.onLine)}`,
+          `origin: ${window.location.origin}`,
+          `baseUrl: ${cfg.baseUrl}`,
+          `cultureInvariant: ${String(cfg.cultureInvariant)}`,
+          `x-api-key: ${cfg.lubeLoggerApiKey ? `set (${cfg.lubeLoggerApiKey.length} chars)` : 'missing'}`,
+          formatError(e),
+        ].join('\n'),
+      )
+    }
+  }
 
   async function onTestViaProxy() {
     if (!cfg) return
     setBusyTest('proxy')
     setTestResult(null)
     try {
-      const me = await whoAmI({ ...cfg, useProxy: true })
-      setTestResult(`OK (via proxy)\nwhoami: ${JSON.stringify(me)}`)
+      await testWhoami(true)
     } catch (e) {
-      setTestResult(String(e))
+      setTestResult(formatError(e))
     } finally {
       setBusyTest(null)
     }
@@ -50,10 +130,9 @@ export default function SettingsPage() {
     setBusyTest('direct')
     setTestResult(null)
     try {
-      const me = await whoAmI({ ...cfg, useProxy: false })
-      setTestResult(`OK (direct)\nwhoami: ${JSON.stringify(me)}`)
+      await testWhoami(false)
     } catch (e) {
-      setTestResult(String(e))
+      setTestResult(formatError(e))
     } finally {
       setBusyTest(null)
     }
