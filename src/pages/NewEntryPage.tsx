@@ -12,6 +12,22 @@ function numberOrEmpty(n: number | undefined) {
   return typeof n === 'number' && Number.isFinite(n) ? String(n) : ''
 }
 
+function DoneIcon() {
+  return (
+    <span className="status-icon muted" aria-label="Done">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M20 6 9 17l-5-5"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  )
+}
+
 export default function NewEntryPage() {
   // Avoid re-loading config object every render (prevents effect loops).
   const cfg = useMemo(() => loadConfig(), [])
@@ -25,6 +41,13 @@ export default function NewEntryPage() {
   const [extractBusy, setExtractBusy] = useState(false)
   const [submitBusy, setSubmitBusy] = useState(false)
   const lastExtractSigRef = useRef<string>('')
+
+  const [card1Open, setCard1Open] = useState(true)
+  const [card2Open, setCard2Open] = useState(true)
+  const [card3Open, setCard3Open] = useState(true)
+  const card1Touched = useRef(false)
+  const card2Touched = useRef(false)
+  const card3Touched = useRef(false)
 
   const pumpUrl = useMemo(() => {
     if (!draft.pumpImage) return null
@@ -97,6 +120,37 @@ export default function NewEntryPage() {
 
   const canExtract = Boolean(draft.vehicleId && draft.pumpImage && draft.odometerImage)
   const form = draft.form ?? { isfilltofull: true, missedfuelup: false }
+
+  const step1Done = Boolean(draft.vehicleId)
+  const step2Done = Boolean(draft.pumpImage)
+  const step3Done = Boolean(draft.odometerImage)
+
+  useEffect(() => {
+    if (!step1Done) {
+      setCard1Open(true)
+      card1Touched.current = false
+      return
+    }
+    if (!card1Touched.current) setCard1Open(false)
+  }, [step1Done])
+
+  useEffect(() => {
+    if (!step2Done) {
+      setCard2Open(true)
+      card2Touched.current = false
+      return
+    }
+    if (!card2Touched.current) setCard2Open(false)
+  }, [step2Done])
+
+  useEffect(() => {
+    if (!step3Done) {
+      setCard3Open(true)
+      card3Touched.current = false
+      return
+    }
+    if (!card3Touched.current) setCard3Open(false)
+  }, [step3Done])
 
   useEffect(() => {
     if (!cfg) return
@@ -202,12 +256,20 @@ export default function NewEntryPage() {
 
       {error && <div className="error">{error}</div>}
 
-      <div className="card stack">
-        <div className="row">
+      <div className={`card stack${step1Done && !card1Open ? ' collapsed' : ''}`}>
+        <button
+          className="row card-header-btn"
+          type="button"
+          onClick={() => {
+            if (!step1Done) return
+            card1Touched.current = true
+            setCard1Open((v) => !v)
+          }}
+        >
           <strong>1) Select vehicle</strong>
-          <span className="muted">{draft.vehicleId ? 'Done' : 'Required'}</span>
-        </div>
-        {busy ? (
+          {step1Done ? <DoneIcon /> : <span className="muted">Required</span>}
+        </button>
+        {step1Done && !card1Open ? null : busy ? (
           <div className="muted">Loading vehicles…</div>
         ) : (
           <div className="vehicle-grid">
@@ -235,93 +297,119 @@ export default function NewEntryPage() {
         )}
       </div>
 
-      <div className="card stack" style={{ opacity: draft.vehicleId ? 1 : 0.6 }}>
-        <div className="row">
-          <strong>2) Pump photo</strong>
-          <span className="muted">{draft.pumpImage ? 'Done' : 'Required'}</span>
-        </div>
-        <label
-          className={`image-preview clickable${!draft.vehicleId || submitBusy ? ' disabled' : ''}`}
-          aria-disabled={!draft.vehicleId || submitBusy}
+      <div className={`card stack${step2Done && !card2Open ? ' collapsed' : ''}`} style={{ opacity: step1Done ? 1 : 0.6 }}>
+        <button
+          className="row card-header-btn"
+          type="button"
+          onClick={() => {
+            if (!step2Done) return
+            card2Touched.current = true
+            setCard2Open((v) => !v)
+          }}
         >
-          {pumpUrl ? (
-            <>
-              <img src={pumpUrl} alt="Pump preview" />
-              <div className="image-overlay">Tap to replace</div>
-            </>
-          ) : (
-            <div className="image-placeholder">
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M7 7h3l1-2h2l1 2h3a2 2 0 0 1 2 2v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V9a2 2 0 0 1 2-2Z"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinejoin="round"
-                />
-                <path d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" stroke="currentColor" strokeWidth="1.6" />
-              </svg>
-              <div>{draft.pumpImage ? 'Replace pump photo' : 'Tap to choose pump photo'}</div>
+          <strong>2) Pump photo</strong>
+          {step2Done ? <DoneIcon /> : <span className="muted">Required</span>}
+        </button>
+        {step2Done && !card2Open ? null : (
+          <>
+            <label
+              className={`image-preview clickable${!step1Done || submitBusy ? ' disabled' : ''}`}
+              aria-disabled={!step1Done || submitBusy}
+            >
+              {pumpUrl ? (
+                <>
+                  <img src={pumpUrl} alt="Pump preview" />
+                  <div className="image-overlay">Tap to replace</div>
+                </>
+              ) : (
+                <div className="image-placeholder">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M7 7h3l1-2h2l1 2h3a2 2 0 0 1 2 2v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V9a2 2 0 0 1 2-2Z"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinejoin="round"
+                    />
+                    <path d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" stroke="currentColor" strokeWidth="1.6" />
+                  </svg>
+                  <div>{draft.pumpImage ? 'Replace pump photo' : 'Tap to choose pump photo'}</div>
+                </div>
+              )}
+              <input
+                className="sr-only"
+                type="file"
+                accept="image/*"
+                onChange={(e) => onFileChange('pumpImage', e.target.files?.[0] ?? null)}
+                disabled={!step1Done || submitBusy}
+              />
+            </label>
+            <div className="muted">
+              {draft.pumpImage
+                ? `Selected: ${draft.pumpImage.type || 'image'} (${Math.round(draft.pumpImage.size / 1024)} KB)`
+                : ''}
             </div>
-          )}
-          <input
-            className="sr-only"
-            type="file"
-            accept="image/*"
-            onChange={(e) => onFileChange('pumpImage', e.target.files?.[0] ?? null)}
-            disabled={!draft.vehicleId || submitBusy}
-          />
-        </label>
-        <div className="muted">
-          {draft.pumpImage ? `Selected: ${draft.pumpImage.type || 'image'} (${Math.round(draft.pumpImage.size / 1024)} KB)` : ''}
-        </div>
+          </>
+        )}
       </div>
 
-      <div className="card stack" style={{ opacity: draft.vehicleId && draft.pumpImage ? 1 : 0.6 }}>
-        <div className="row">
-          <strong>3) Odometer photo</strong>
-          <span className="muted">{draft.odometerImage ? 'Done' : 'Required'}</span>
-        </div>
-        <label
-          className={`image-preview clickable${!draft.vehicleId || !draft.pumpImage || submitBusy ? ' disabled' : ''}`}
-          aria-disabled={!draft.vehicleId || !draft.pumpImage || submitBusy}
+      <div className={`card stack${step3Done && !card3Open ? ' collapsed' : ''}`} style={{ opacity: step1Done && step2Done ? 1 : 0.6 }}>
+        <button
+          className="row card-header-btn"
+          type="button"
+          onClick={() => {
+            if (!step3Done) return
+            card3Touched.current = true
+            setCard3Open((v) => !v)
+          }}
         >
-          {odoUrl ? (
-            <>
-              <img src={odoUrl} alt="Odometer preview" />
-              <div className="image-overlay">Tap to replace</div>
-            </>
-          ) : (
-            <div className="image-placeholder">
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M7 7h3l1-2h2l1 2h3a2 2 0 0 1 2 2v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V9a2 2 0 0 1 2-2Z"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M15 12.5 12.8 14M8.5 17.5A6.8 6.8 0 0 1 12 10.2a6.8 6.8 0 0 1 3.5 7.3"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                />
-              </svg>
-              <div>{draft.odometerImage ? 'Replace odometer photo' : 'Tap to choose odometer photo'}</div>
+          <strong>3) Odometer photo</strong>
+          {step3Done ? <DoneIcon /> : <span className="muted">Required</span>}
+        </button>
+        {step3Done && !card3Open ? null : (
+          <>
+            <label
+              className={`image-preview clickable${!step1Done || !step2Done || submitBusy ? ' disabled' : ''}`}
+              aria-disabled={!step1Done || !step2Done || submitBusy}
+            >
+              {odoUrl ? (
+                <>
+                  <img src={odoUrl} alt="Odometer preview" />
+                  <div className="image-overlay">Tap to replace</div>
+                </>
+              ) : (
+                <div className="image-placeholder">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M7 7h3l1-2h2l1 2h3a2 2 0 0 1 2 2v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V9a2 2 0 0 1 2-2Z"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M15 12.5 12.8 14M8.5 17.5A6.8 6.8 0 0 1 12 10.2a6.8 6.8 0 0 1 3.5 7.3"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <div>{draft.odometerImage ? 'Replace odometer photo' : 'Tap to choose odometer photo'}</div>
+                </div>
+              )}
+              <input
+                className="sr-only"
+                type="file"
+                accept="image/*"
+                onChange={(e) => onFileChange('odometerImage', e.target.files?.[0] ?? null)}
+                disabled={!step1Done || !step2Done || submitBusy}
+              />
+            </label>
+            <div className="muted">
+              {draft.odometerImage
+                ? `Selected: ${draft.odometerImage.type || 'image'} (${Math.round(draft.odometerImage.size / 1024)} KB)`
+                : ''}
             </div>
-          )}
-          <input
-            className="sr-only"
-            type="file"
-            accept="image/*"
-            onChange={(e) => onFileChange('odometerImage', e.target.files?.[0] ?? null)}
-            disabled={!draft.vehicleId || !draft.pumpImage || submitBusy}
-          />
-        </label>
-        <div className="muted">
-          {draft.odometerImage
-            ? `Selected: ${draft.odometerImage.type || 'image'} (${Math.round(draft.odometerImage.size / 1024)} KB)`
-            : ''}
-        </div>
+          </>
+        )}
       </div>
 
       <div className="card stack" style={{ opacity: canExtract ? 1 : 0.6 }}>
