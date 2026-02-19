@@ -25,6 +25,7 @@ export default function NewEntryPage() {
   const [extractBusy, setExtractBusy] = useState(false)
   const [submitBusy, setSubmitBusy] = useState(false)
   const lastExtractSigRef = useRef<string>('')
+  const [vehicleImgMode, setVehicleImgMode] = useState<Record<number, 'direct' | 'proxy' | 'none'>>({})
 
   const pumpUrl = useMemo(() => {
     if (!draft.pumpImage) return null
@@ -177,12 +178,16 @@ export default function NewEntryPage() {
     }
   }
 
-  function vehicleImageUrl(imageLocation?: string) {
+  function vehicleImageUrlDirect(imageLocation?: string) {
     if (!cfg) return null
     if (!imageLocation) return null
-    if (cfg.useProxy) return `/api/lubelogger/image?path=${encodeURIComponent(imageLocation)}`
     if (/^https?:\/\//i.test(imageLocation)) return imageLocation
     return `${cfg.baseUrl.replace(/\/+$/, '')}${imageLocation.startsWith('/') ? '' : '/'}${imageLocation}`
+  }
+
+  function vehicleImageUrlProxy(imageLocation?: string) {
+    if (!imageLocation) return null
+    return `/api/lubelogger/image?path=${encodeURIComponent(imageLocation)}`
   }
 
   if (!cfg) {
@@ -220,7 +225,10 @@ export default function NewEntryPage() {
         ) : (
           <div className="vehicle-grid">
             {vehicles.map((v) => {
-              const img = vehicleImageUrl(v.imageLocation)
+              const direct = vehicleImageUrlDirect(v.imageLocation)
+              const proxy = cfg.useProxy ? vehicleImageUrlProxy(v.imageLocation) : null
+              const mode = vehicleImgMode[v.id] ?? (cfg.useProxy ? 'proxy' : 'direct')
+              const img = mode === 'proxy' ? proxy : mode === 'direct' ? direct : null
               const selected = draft.vehicleId === v.id
               return (
                 <button
@@ -238,7 +246,19 @@ export default function NewEntryPage() {
                 >
                   <div className="vehicle-thumb">
                     {img ? (
-                      <img src={img} alt={v.name} loading="lazy" />
+                      <img
+                        src={img}
+                        alt={v.name}
+                        loading="lazy"
+                        crossOrigin="anonymous"
+                        onError={() => {
+                          setVehicleImgMode((m) => {
+                            const cur = m[v.id] ?? (cfg.useProxy ? 'proxy' : 'direct')
+                            if (cur === 'direct' && cfg.useProxy) return { ...m, [v.id]: 'proxy' }
+                            return { ...m, [v.id]: 'none' }
+                          })
+                        }}
+                      />
                     ) : (
                       <div className="image-placeholder">
                         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
