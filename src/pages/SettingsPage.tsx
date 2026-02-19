@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { loadConfig, saveConfig } from '../lib/config'
 import type { AppConfig, LlmProvider } from '../lib/types'
@@ -40,8 +40,6 @@ export default function SettingsPage() {
   const [testResult, setTestResult] = useState<string | null>(null)
   const [busyTest, setBusyTest] = useState(false)
   const [connectedAs, setConnectedAs] = useState<{ username: string; isAdmin: boolean } | null>(null)
-  const dragProviderRef = useRef<LlmProvider | null>(null)
-
   const activeProviders = useMemo(() => {
     const keyFor = (p: LlmProvider) => (p === 'anthropic' ? anthropicApiKey.trim() : geminiApiKey.trim())
     const ordered = providerOrder.filter((p) => keyFor(p))
@@ -239,44 +237,37 @@ export default function SettingsPage() {
         </label>
 
         <div className="field">
-          <label>LLM order (drag to reorder)</label>
+          <label>LLM order</label>
           <div className="stack" style={{ gap: 8 }}>
             {activeProviders.length ? (
               activeProviders.map((p, idx) => (
               <div
                 key={p}
                 className="row"
-                draggable
-                onDragStart={(e) => {
-                  dragProviderRef.current = p
-                  e.dataTransfer.effectAllowed = 'move'
-                }}
-                onDragOver={(e) => {
-                  e.preventDefault()
-                  e.dataTransfer.dropEffect = 'move'
-                }}
-                onDrop={(e) => {
-                  e.preventDefault()
-                  const fromProvider = dragProviderRef.current
-                  dragProviderRef.current = null
-                  if (!fromProvider) return
-                  const from = activeProviders.indexOf(fromProvider)
-                  if (from < 0) return
-                  moveProvider(from, idx)
-                }}
                 style={{
                   padding: '8px 10px',
                   borderRadius: 10,
                   border: '1px solid rgba(255, 255, 255, 0.14)',
                   background: 'rgba(0, 0, 0, 0.18)',
-                  cursor: 'grab',
                 }}
                 aria-label={`LLM priority ${idx + 1}: ${providerLabel(p)}`}
-                title="Drag to reorder"
               >
                 <strong>
                   {idx + 1}. {providerLabel(p)}
                 </strong>
+                <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                  <button className="btn small" type="button" disabled={idx === 0} onClick={() => moveProvider(idx, idx - 1)}>
+                    ↑
+                  </button>
+                  <button
+                    className="btn small"
+                    type="button"
+                    disabled={idx === activeProviders.length - 1}
+                    onClick={() => moveProvider(idx, idx + 1)}
+                  >
+                    ↓
+                  </button>
+                </div>
               </div>
               ))
             ) : (
