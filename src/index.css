@@ -45,6 +45,14 @@ a {
   color: inherit;
 }
 
+a.btn {
+  text-decoration: none;
+  opacity: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 input,
 select,
 button,
