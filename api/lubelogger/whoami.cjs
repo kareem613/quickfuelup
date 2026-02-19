@@ -1,4 +1,4 @@
-const { proxyToLubeLogger } = require('./_util')
+const { proxyToLubeLogger } = require('./_util.cjs')
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') {
@@ -7,6 +7,6 @@ module.exports = async (req, res) => {
     res.end('Method Not Allowed')
     return
   }
-  await proxyToLubeLogger(req, res, '/vehicles')
+  await proxyToLubeLogger(req, res, '/whoami')
 }
 
