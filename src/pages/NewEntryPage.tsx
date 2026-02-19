@@ -28,6 +28,28 @@ function DoneIcon() {
   )
 }
 
+function RefreshIcon() {
+  return (
+    <span className="status-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none">
+        <path
+          d="M20 12a8 8 0 0 1-14.3 5M4 12a8 8 0 0 1 14.3-5"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+        <path
+          d="M20 16v-4h-4M4 8v4h4"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  )
+}
+
 export default function NewEntryPage() {
   // Avoid re-loading config object every render (prevents effect loops).
   const cfg = useMemo(() => loadConfig(), [])
@@ -416,9 +438,7 @@ export default function NewEntryPage() {
         <div className="row">
           <strong>4) Extract</strong>
           <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
-            <span className="muted">
-              {imageBusy ? 'Processing…' : extractBusy ? 'Extracting…' : canSubmit ? 'Ready' : 'Waiting'}
-            </span>
+            <span className="muted">{imageBusy ? 'Processing…' : extractBusy ? 'Extracting…' : 'Waiting'}</span>
             <button
               className="btn small"
               disabled={!canExtract || extractBusy || submitBusy}
@@ -427,8 +447,10 @@ export default function NewEntryPage() {
                 setDraft((d) => ({ ...d, extracted: undefined }))
               }}
               type="button"
+              aria-label="Retry extraction"
+              title="Retry"
             >
-              Retry extract
+              <RefreshIcon />
             </button>
           </div>
         </div>
