@@ -71,13 +71,43 @@ export default function SettingsPage() {
     try {
       const res = await fetch(url, { headers })
       const text = await res.text()
+
+      const vercelMitigated = res.headers.get('x-vercel-mitigated')
+      const contentType = res.headers.get('content-type') ?? ''
+      const looksLikeCheckpoint =
+        vercelMitigated === 'challenge' || (contentType.includes('text/html') && /vercel security checkpoint/i.test(text))
+
+      const bodyLength = text.length
+      const maxBody = 2500
+      const bodyPreview =
+        bodyLength > maxBody ? `${text.slice(0, maxBody)}\n...[truncated ${bodyLength - maxBody} chars]...` : text
+
+      if (looksLikeCheckpoint) {
+        const verifyUrl = new URL('/api/lubelogger/whoami', window.location.origin).toString()
+        setTestResult(
+          [
+            `FAIL (${useProxyOverride ? 'via proxy' : 'direct'})`,
+            `url: ${url}`,
+            `status: ${res.status} ${res.statusText}`,
+            `x-vercel-mitigated: ${vercelMitigated ?? '(none)'}`,
+            `x-vercel-id: ${res.headers.get('x-vercel-id') ?? '(none)'}`,
+            `hint: Vercel WAF is challenging this API route. API fetches will fail until the browser completes the security checkpoint session.`,
+            `action: Open this URL in a new tab, let it verify, then retry the test:\n${verifyUrl}`,
+            `bodyLength: ${bodyLength}`,
+            `bodyPreview:\n${bodyPreview}`,
+          ].join('\n'),
+        )
+        return
+      }
+
       const details = [
         `url: ${url}`,
         `status: ${res.status} ${res.statusText}`,
         `headers: ${Array.from(res.headers.entries())
           .map(([k, v]) => `${k}: ${v}`)
           .join('; ')}`,
-        `body: ${text}`,
+        `bodyLength: ${bodyLength}`,
+        `body: ${bodyPreview}`,
       ].join('\n')
 
       if (!res.ok) throw new Error(`HTTP error\n${details}`)
