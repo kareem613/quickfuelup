@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { loadConfig, saveConfig } from '../lib/config'
 import type { AppConfig } from '../lib/types'
-import { getVehicles, whoAmI } from '../lib/lubelogger'
+import { whoAmI } from '../lib/lubelogger'
 
 export default function SettingsPage() {
   const navigate = useNavigate()
@@ -13,7 +13,7 @@ export default function SettingsPage() {
   const [cultureInvariant, setCultureInvariant] = useState(existing?.cultureInvariant ?? true)
   const [useProxy, setUseProxy] = useState(existing?.useProxy ?? false)
   const [testResult, setTestResult] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [busyTest, setBusyTest] = useState<'proxy' | 'direct' | null>(null)
 
   useEffect(() => {
     document.title = 'QuickFuelUp - Settings'
@@ -27,22 +27,35 @@ export default function SettingsPage() {
         lubeLoggerApiKey: lubeLoggerApiKey.trim(),
         geminiApiKey: geminiApiKey.trim(),
         cultureInvariant,
-        useProxy,
-      }
-    : null
+         useProxy,
+       }
+     : null
 
-  async function onTest() {
+  async function onTestViaProxy() {
     if (!cfg) return
-    setBusy(true)
+    setBusyTest('proxy')
     setTestResult(null)
     try {
-      const me = await whoAmI(cfg)
-      const vehicles = await getVehicles(cfg)
-      setTestResult(`OK\nwhoami: ${JSON.stringify(me)}\nvehicles: ${vehicles.length}`)
+      const me = await whoAmI({ ...cfg, useProxy: true })
+      setTestResult(`OK (via proxy)\nwhoami: ${JSON.stringify(me)}`)
     } catch (e) {
       setTestResult(String(e))
     } finally {
-      setBusy(false)
+      setBusyTest(null)
+    }
+  }
+
+  async function onTestDirect() {
+    if (!cfg) return
+    setBusyTest('direct')
+    setTestResult(null)
+    try {
+      const me = await whoAmI({ ...cfg, useProxy: false })
+      setTestResult(`OK (direct)\nwhoami: ${JSON.stringify(me)}`)
+    } catch (e) {
+      setTestResult(String(e))
+    } finally {
+      setBusyTest(null)
     }
   }
 
@@ -114,13 +127,16 @@ export default function SettingsPage() {
           <div className="muted">
             Proxy requires the Vercel env var <code>LUBELOGGER_PROXY_BASE_URL</code> to be set (then redeploy).
           </div>
-        )}
+         )}
 
-        <div className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
-          <button className="btn" onClick={onTest} disabled={!cfg || busy}>
-            {busy ? 'Testing…' : 'Test connection'}
+        <div className="actions">
+          <button className="btn" onClick={onTestViaProxy} disabled={!cfg || busyTest !== null}>
+            {busyTest === 'proxy' ? 'Testing…' : 'Test via proxy'}
           </button>
-          <button className="btn primary" onClick={onSave} disabled={!cfg || busy}>
+          <button className="btn" onClick={onTestDirect} disabled={!cfg || busyTest !== null}>
+            {busyTest === 'direct' ? 'Testing…' : 'Test direct'}
+          </button>
+          <button className="btn primary" onClick={onSave} disabled={!cfg || busyTest !== null}>
             Save
           </button>
         </div>
