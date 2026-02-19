@@ -116,6 +116,9 @@ export default function ReviewPage() {
       if (typeof form.odometer !== 'number') throw new Error('Odometer is required')
       if (typeof form.fuelconsumed !== 'number') throw new Error('Fuel quantity is required')
       if (typeof form.cost !== 'number') throw new Error('Total cost is required')
+      if (form.odometer < 0) throw new Error('Odometer must be >= 0')
+      if (form.fuelconsumed <= 0) throw new Error('Fuel quantity must be > 0')
+      if (form.cost <= 0) throw new Error('Total cost must be > 0')
 
       const cfg2 = cfg!
       const d = draft!

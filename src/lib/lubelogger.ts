@@ -28,14 +28,17 @@ export async function getVehicles(cfg: AppConfig): Promise<Vehicle[]> {
   const data = (await res.json()) as unknown
 
   if (!Array.isArray(data)) return []
+
   return data
-    .map((v) => {
-      const id = Number((v as any)?.id)
-      const name = String((v as any)?.name ?? (v as any)?.description ?? `Vehicle ${id}`)
+    .map((v): Vehicle | null => {
+      if (typeof v !== 'object' || v === null) return null
+      const obj = v as Record<string, unknown>
+      const id = Number(obj.id)
       if (!Number.isFinite(id)) return null
-      return { id, name } satisfies Vehicle
+      const name = String(obj.name ?? obj.description ?? `Vehicle ${id}`)
+      return { id, name }
     })
-    .filter(Boolean) as Vehicle[]
+    .filter((v): v is Vehicle => v !== null)
 }
 
 export type AddGasRecordInput = {
@@ -78,4 +81,3 @@ export async function addGasRecord(cfg: AppConfig, input: AddGasRecordInput) {
     return text
   }
 }
-

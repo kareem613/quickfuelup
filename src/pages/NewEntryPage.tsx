@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { loadConfig } from '../lib/config'
 import { todayISODate } from '../lib/date'
 import { clearDraft, loadDraft, saveDraft } from '../lib/draft'
+import { compressImage } from '../lib/image'
 import { getVehicles } from '../lib/lubelogger'
 import type { Draft, Vehicle } from '../lib/types'
 
@@ -14,6 +15,7 @@ export default function NewEntryPage() {
   const [draft, setDraft] = useState<Draft>({ date: todayISODate() })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [imageBusy, setImageBusy] = useState(false)
 
   useEffect(() => {
     document.title = 'QuickFuelUp - New Entry'
@@ -62,7 +64,16 @@ export default function NewEntryPage() {
 
   async function onFileChange(key: 'pumpImage' | 'odometerImage', file: File | null) {
     if (!file) return
-    setDraft((d) => ({ ...d, [key]: file }))
+    setImageBusy(true)
+    setError(null)
+    try {
+      const compressed = await compressImage(file, { maxDimension: 1600, quality: 0.85 })
+      setDraft((d) => ({ ...d, [key]: compressed }))
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setImageBusy(false)
+    }
   }
 
   const canContinue = Boolean(draft.vehicleId && draft.pumpImage && draft.odometerImage)
@@ -105,7 +116,9 @@ export default function NewEntryPage() {
             capture="environment"
             onChange={(e) => onFileChange('pumpImage', e.target.files?.[0] ?? null)}
           />
-          <div className="muted">{draft.pumpImage ? `Selected: ${(draft.pumpImage as any).name ?? 'image'}` : ''}</div>
+          <div className="muted">
+            {draft.pumpImage ? `Selected: ${draft.pumpImage.type || 'image'} (${Math.round(draft.pumpImage.size / 1024)} KB)` : ''}
+          </div>
         </div>
 
         <div className="field">
@@ -117,12 +130,14 @@ export default function NewEntryPage() {
             onChange={(e) => onFileChange('odometerImage', e.target.files?.[0] ?? null)}
           />
           <div className="muted">
-            {draft.odometerImage ? `Selected: ${(draft.odometerImage as any).name ?? 'image'}` : ''}
+            {draft.odometerImage
+              ? `Selected: ${draft.odometerImage.type || 'image'} (${Math.round(draft.odometerImage.size / 1024)} KB)`
+              : ''}
           </div>
         </div>
 
         <div className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
-          <button className="btn primary" disabled={!canContinue} onClick={() => navigate('/review')}>
+          <button className="btn primary" disabled={!canContinue || imageBusy} onClick={() => navigate('/review')}>
             Continue
           </button>
           <button
@@ -138,9 +153,10 @@ export default function NewEntryPage() {
       </div>
 
       <div className="muted">
-        Photos are stored locally only until a successful submission, so you can retry if something fails.
+        {imageBusy
+          ? 'Processing images…'
+          : 'Photos are stored locally only until a successful submission, so you can retry if something fails.'}
       </div>
     </div>
   )
 }
-

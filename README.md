@@ -1,73 +1,40 @@
-# React + TypeScript + Vite
+# QuickFuelUp
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Mobile-first PWA for capturing fuel fill-ups and posting them to the [LubeLogger](https://lubelogger.com) API.
 
-Currently, two official plugins are available:
+## What it does
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Capture a **pump photo** and **odometer photo**
+- Use **Gemini Vision** to extract:
+  - `odometer`
+  - `fuelconsumed` (quantity)
+  - `cost` (total cost)
+- Review/edit fields, then submit to LubeLogger:
+  - `POST /api/vehicle/gasrecords/add?vehicleId=...`
 
-## React Compiler
+## Setup (in-app)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Open **Settings** and configure:
+- LubeLogger Base URL (e.g. `https://demo.lubelogger.com`)
+- LubeLogger API Key (sent as `x-api-key`)
+- Gemini API key
 
-## Expanding the ESLint configuration
+Use **Test connection** to hit `/api/whoami` and `/api/vehicles`.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Data storage
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- Config is stored locally in your browser (LocalStorage).
+- A single in-progress draft (including compressed photos) is stored locally (IndexedDB) **until a successful submission** so you can retry without re-taking photos.
+- No submission history is tracked.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Development
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Notes
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- This is a **client-only** app. Treat API keys as sensitive.
+- LubeLogger must be reachable from the browser; if you run it on your LAN, ensure HTTPS and CORS are compatible with browser requests.
