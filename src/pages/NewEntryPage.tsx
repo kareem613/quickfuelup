@@ -456,13 +456,9 @@ export default function NewEntryPage() {
         </div>
       </div>
 
-      <div className="muted">
-        {imageBusy
-          ? 'Processing images…'
-          : extractBusy
-            ? 'Extracting from photos…'
-            : 'After an error, your draft stays saved so you can retry without retaking photos.'}
-      </div>
+      {imageBusy || extractBusy ? (
+        <div className="muted">{imageBusy ? 'Processing images…' : 'Extracting from photos…'}</div>
+      ) : null}
     </div>
   )
 }

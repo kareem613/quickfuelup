@@ -189,6 +189,15 @@ export default function SettingsPage() {
           />
         </div>
 
+        <label className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
+          <input
+            type="checkbox"
+            checked={cultureInvariant}
+            onChange={(e) => setCultureInvariant(e.target.checked)}
+          />
+          <span>Send LubeLogger “culture-invariant” header</span>
+        </label>
+
         <div className="field">
           <label>Gemini API Key</label>
           <input
@@ -199,15 +208,6 @@ export default function SettingsPage() {
             spellCheck={false}
           />
         </div>
-
-        <label className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
-          <input
-            type="checkbox"
-            checked={cultureInvariant}
-            onChange={(e) => setCultureInvariant(e.target.checked)}
-          />
-          <span>Send LubeLogger “culture-invariant” header</span>
-        </label>
 
         <div className="actions">
           <button className="btn" onClick={onTestDirect} disabled={!cfg || busyTest}>

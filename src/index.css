@@ -19,6 +19,12 @@ body {
   min-height: 100vh;
 }
 
+.app-footer {
+  padding: 12px 16px 18px;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
 a {
   color: inherit;
 }

@@ -5,12 +5,18 @@ import SettingsPage from './pages/SettingsPage'
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/settings" element={<SettingsPage />} />
-      <Route path="/new" element={<NewEntryPage />} />
-      <Route path="/review" element={<ReviewPage />} />
-      <Route path="/" element={<Navigate to="/new" replace />} />
-      <Route path="*" element={<Navigate to="/new" replace />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/new" element={<NewEntryPage />} />
+        <Route path="/review" element={<ReviewPage />} />
+        <Route path="/" element={<Navigate to="/new" replace />} />
+        <Route path="*" element={<Navigate to="/new" replace />} />
+      </Routes>
+
+      <footer className="app-footer muted">
+        v{__APP_VERSION__} ({__GIT_SHA__})
+      </footer>
+    </>
   )
 }
