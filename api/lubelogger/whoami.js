@@ -1,6 +1,6 @@
-const { proxyToLubeLogger } = require('./_util.cjs')
+import { proxyToLubeLogger } from './_util.js'
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   if (req.method !== 'GET') {
     res.statusCode = 405
     res.setHeader('content-type', 'text/plain; charset=utf-8')

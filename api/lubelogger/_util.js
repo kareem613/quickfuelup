@@ -15,7 +15,7 @@ function pickHeader(req, key) {
   return Array.isArray(v) ? v.join(',') : String(v)
 }
 
-async function proxyToLubeLogger(req, res, targetPath) {
+export async function proxyToLubeLogger(req, res, targetPath) {
   const baseUrl = process.env.LUBELOGGER_PROXY_BASE_URL
   if (!baseUrl) {
     res.statusCode = 500
@@ -55,6 +55,4 @@ async function proxyToLubeLogger(req, res, targetPath) {
   const buf = Buffer.from(await resp.arrayBuffer())
   res.end(buf)
 }
-
-module.exports = { proxyToLubeLogger }
 
