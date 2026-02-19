@@ -182,9 +182,6 @@ export default function NewEntryPage() {
     if (!cfg) return null
     if (!imageLocation) return null
     if (/^https?:\/\//i.test(imageLocation)) return imageLocation
-    // When proxy mode is enabled, allow same-origin /images/* paths so thumbnails can load from
-    // https://quickfuelup.vercel.app/images/... (if you’ve set up routing on the deployment).
-    if (cfg.useProxy && imageLocation.startsWith('/images/')) return imageLocation
     return `${cfg.baseUrl.replace(/\/+$/, '')}${imageLocation.startsWith('/') ? '' : '/'}${imageLocation}`
   }
 
