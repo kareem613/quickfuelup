@@ -263,16 +263,13 @@ export default function NewEntryPage() {
                       <div className="image-placeholder">
                         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                           <path
-                            d="M7 7h3l1-2h2l1 2h3a2 2 0 0 1 2 2v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V9a2 2 0 0 1 2-2Z"
+                            d="M6 11.5 7.3 8.6A2 2 0 0 1 9.1 7.4h5.8a2 2 0 0 1 1.8 1.2l1.3 2.9H21a1 1 0 0 1 1 1v4.2A2.3 2.3 0 0 1 19.7 19H19a2 2 0 0 1-4 0H9a2 2 0 0 1-4 0H4.3A2.3 2.3 0 0 1 2 16.7v-4.2a1 1 0 0 1 1-1H6Z"
                             stroke="currentColor"
                             strokeWidth="1.6"
                             strokeLinejoin="round"
                           />
-                          <path
-                            d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"
-                            stroke="currentColor"
-                            strokeWidth="1.6"
-                          />
+                          <circle cx="6.5" cy="19" r="2" stroke="currentColor" strokeWidth="1.6" />
+                          <circle cx="17.5" cy="19" r="2" stroke="currentColor" strokeWidth="1.6" />
                         </svg>
                       </div>
                     )}
