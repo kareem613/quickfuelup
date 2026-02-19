@@ -327,88 +327,92 @@ export default function NewEntryPage() {
           </span>
         </div>
 
-        <div className="field">
-          <label>Date</label>
-          <input
-            type="date"
-            value={draft.date}
-            onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
-            disabled={submitBusy}
-          />
+        <div className="grid two">
+          <div className="field">
+            <label>Date</label>
+            <input
+              type="date"
+              value={draft.date}
+              onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
+              disabled={submitBusy}
+            />
+          </div>
+          <div className="field">
+            <label>Odometer</label>
+            <input
+              inputMode="numeric"
+              value={numberOrEmpty(form.odometer)}
+              onChange={(e) => {
+                const n = Number(e.target.value)
+                setDraft((d) => ({
+                  ...d,
+                  form: { ...form, odometer: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
+                }))
+              }}
+              disabled={!canExtract || submitBusy}
+            />
+          </div>
         </div>
 
-        <div className="field">
-          <label>Odometer</label>
-          <input
-            inputMode="numeric"
-            value={numberOrEmpty(form.odometer)}
-            onChange={(e) => {
-              const n = Number(e.target.value)
-              setDraft((d) => ({
-                ...d,
-                form: { ...form, odometer: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
-              }))
-            }}
-            disabled={!canExtract || submitBusy}
-          />
+        <div className="grid two">
+          <div className="field">
+            <label>Fuel quantity</label>
+            <input
+              inputMode="decimal"
+              value={numberOrEmpty(form.fuelconsumed)}
+              onChange={(e) => {
+                const n = Number(e.target.value)
+                setDraft((d) => ({
+                  ...d,
+                  form: { ...form, fuelconsumed: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
+                }))
+              }}
+              disabled={!canExtract || submitBusy}
+            />
+          </div>
+          <div className="field">
+            <label>Total cost</label>
+            <input
+              inputMode="decimal"
+              value={numberOrEmpty(form.cost)}
+              onChange={(e) => {
+                const n = Number(e.target.value)
+                setDraft((d) => ({
+                  ...d,
+                  form: { ...form, cost: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
+                }))
+              }}
+              disabled={!canExtract || submitBusy}
+            />
+          </div>
         </div>
 
-        <div className="field">
-          <label>Fuel quantity</label>
-          <input
-            inputMode="decimal"
-            value={numberOrEmpty(form.fuelconsumed)}
-            onChange={(e) => {
-              const n = Number(e.target.value)
-              setDraft((d) => ({
-                ...d,
-                form: { ...form, fuelconsumed: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
-              }))
-            }}
-            disabled={!canExtract || submitBusy}
-          />
+        <div className="row" style={{ justifyContent: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+          <label className="row" style={{ justifyContent: 'flex-start', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={Boolean(form.isfilltofull)}
+              onChange={(e) => setDraft((d) => ({ ...d, form: { ...form, isfilltofull: e.target.checked, missedfuelup: form.missedfuelup } }))}
+              disabled={!canExtract || submitBusy}
+            />
+            <span>Fill to full</span>
+          </label>
+
+          <label className="row" style={{ justifyContent: 'flex-start', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={Boolean(form.missedfuelup)}
+              onChange={(e) => setDraft((d) => ({ ...d, form: { ...form, missedfuelup: e.target.checked, isfilltofull: form.isfilltofull } }))}
+              disabled={!canExtract || submitBusy}
+            />
+            <span>Missed fuel-up</span>
+          </label>
         </div>
-
-        <div className="field">
-          <label>Total cost</label>
-          <input
-            inputMode="decimal"
-            value={numberOrEmpty(form.cost)}
-            onChange={(e) => {
-              const n = Number(e.target.value)
-              setDraft((d) => ({
-                ...d,
-                form: { ...form, cost: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
-              }))
-            }}
-            disabled={!canExtract || submitBusy}
-          />
-        </div>
-
-        <label className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
-          <input
-            type="checkbox"
-            checked={Boolean(form.isfilltofull)}
-            onChange={(e) => setDraft((d) => ({ ...d, form: { ...form, isfilltofull: e.target.checked, missedfuelup: form.missedfuelup } }))}
-            disabled={!canExtract || submitBusy}
-          />
-          <span>Fill to full</span>
-        </label>
-
-        <label className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
-          <input
-            type="checkbox"
-            checked={Boolean(form.missedfuelup)}
-            onChange={(e) => setDraft((d) => ({ ...d, form: { ...form, missedfuelup: e.target.checked, isfilltofull: form.isfilltofull } }))}
-            disabled={!canExtract || submitBusy}
-          />
-          <span>Missed fuel-up</span>
-        </label>
 
         <div className="field">
           <label>Notes (optional)</label>
           <textarea
-            rows={3}
+            rows={2}
             value={form.notes ?? ''}
             onChange={(e) => setDraft((d) => ({ ...d, form: { ...form, notes: e.target.value, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup } }))}
             disabled={!canExtract || submitBusy}
