@@ -54,7 +54,7 @@ export default function SettingsPage() {
 
   function resolveWhoamiUrl(useProxyOverride: boolean) {
     if (!cfg) return null
-    if (useProxyOverride) return new URL('/api/lubelogger/whoami', window.location.origin).toString()
+    if (useProxyOverride) return new URL('/ll/whoami', window.location.origin).toString()
     return `${cfg.baseUrl.replace(/\/+$/, '')}/api/whoami`
   }
 
@@ -83,7 +83,7 @@ export default function SettingsPage() {
         bodyLength > maxBody ? `${text.slice(0, maxBody)}\n...[truncated ${bodyLength - maxBody} chars]...` : text
 
       if (looksLikeCheckpoint) {
-        const verifyUrl = new URL('/api/lubelogger/whoami', window.location.origin).toString()
+        const verifyUrl = new URL('/ll/whoami', window.location.origin).toString()
         setTestResult(
           [
             `FAIL (${useProxyOverride ? 'via proxy' : 'direct'})`,
@@ -143,7 +143,7 @@ export default function SettingsPage() {
         // If proxy is configured, we can ask the serverless function to run an actual OPTIONS preflight against LubeLogger
         // and report the status/headers (bypasses browser CORS restrictions).
         try {
-          const preflightUrl = `/api/lubelogger/preflight?path=/whoami`
+          const preflightUrl = `/ll/preflight?path=/whoami`
           const r = await fetch(preflightUrl)
           const t = await r.text()
           preflightProbe = `server preflight probe (${preflightUrl}):\n${t}`

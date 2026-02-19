@@ -187,7 +187,7 @@ export default function NewEntryPage() {
 
   function vehicleImageUrlProxy(imageLocation?: string) {
     if (!imageLocation) return null
-    return `/api/lubelogger/image?path=${encodeURIComponent(imageLocation)}`
+    return `/ll/image?path=${encodeURIComponent(imageLocation)}`
   }
 
   if (!cfg) {
