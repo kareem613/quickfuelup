@@ -26,6 +26,23 @@ export default function NewEntryPage() {
   const [submitBusy, setSubmitBusy] = useState(false)
   const lastExtractSigRef = useRef<string>('')
 
+  const pumpUrl = useMemo(() => {
+    if (!draft.pumpImage) return null
+    return URL.createObjectURL(draft.pumpImage)
+  }, [draft.pumpImage])
+
+  const odoUrl = useMemo(() => {
+    if (!draft.odometerImage) return null
+    return URL.createObjectURL(draft.odometerImage)
+  }, [draft.odometerImage])
+
+  useEffect(() => {
+    return () => {
+      if (pumpUrl) URL.revokeObjectURL(pumpUrl)
+      if (odoUrl) URL.revokeObjectURL(odoUrl)
+    }
+  }, [odoUrl, pumpUrl])
+
   useEffect(() => {
     document.title = 'QuickFuelUp - New Entry'
   }, [])
@@ -218,6 +235,28 @@ export default function NewEntryPage() {
           <strong>2) Pump photo</strong>
           <span className="muted">{draft.pumpImage ? 'Done' : 'Required'}</span>
         </div>
+        <div className="image-preview">
+          {pumpUrl ? (
+            <img src={pumpUrl} alt="Pump preview" />
+          ) : (
+            <div className="image-placeholder">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M7 7h3l1-2h2l1 2h3a2 2 0 0 1 2 2v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V9a2 2 0 0 1 2-2Z"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                />
+              </svg>
+              <div>Choose a pump photo</div>
+            </div>
+          )}
+        </div>
         <div className="field">
           <label>Pump photo (total + quantity)</label>
           <input
@@ -238,6 +277,29 @@ export default function NewEntryPage() {
         <div className="row">
           <strong>3) Odometer photo</strong>
           <span className="muted">{draft.odometerImage ? 'Done' : 'Required'}</span>
+        </div>
+        <div className="image-preview">
+          {odoUrl ? (
+            <img src={odoUrl} alt="Odometer preview" />
+          ) : (
+            <div className="image-placeholder">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M7 7h3l1-2h2l1 2h3a2 2 0 0 1 2 2v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V9a2 2 0 0 1 2-2Z"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M15 12.5 12.8 14M8.5 17.5A6.8 6.8 0 0 1 12 10.2a6.8 6.8 0 0 1 3.5 7.3"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div>Choose an odometer photo</div>
+            </div>
+          )}
         </div>
         <div className="field">
           <label>Odometer photo</label>

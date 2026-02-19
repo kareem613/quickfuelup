@@ -93,3 +93,37 @@ textarea {
   border-radius: 10px;
   white-space: pre-wrap;
 }
+
+.image-preview {
+  height: 180px;
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.75;
+  text-align: center;
+  padding: 12px;
+}
+
+.image-placeholder svg {
+  width: 42px;
+  height: 42px;
+  opacity: 0.85;
+}
