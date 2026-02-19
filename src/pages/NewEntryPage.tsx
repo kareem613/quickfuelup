@@ -185,11 +185,6 @@ export default function NewEntryPage() {
     return `${cfg.baseUrl.replace(/\/+$/, '')}${imageLocation.startsWith('/') ? '' : '/'}${imageLocation}`
   }
 
-  function vehicleImageUrlProxy(imageLocation?: string) {
-    if (!imageLocation) return null
-    return `/ll/image?path=${encodeURIComponent(imageLocation)}`
-  }
-
   if (!cfg) {
     return (
       <div className="container stack">
@@ -226,9 +221,7 @@ export default function NewEntryPage() {
           <div className="vehicle-grid">
             {vehicles.map((v) => {
               const direct = vehicleImageUrlDirect(v.imageLocation)
-              const proxy = cfg.useProxy ? vehicleImageUrlProxy(v.imageLocation) : null
-              const mode = vehicleImgMode[v.id] ?? (cfg.useProxy ? 'proxy' : 'direct')
-              const img = mode === 'proxy' ? proxy : mode === 'direct' ? direct : null
+              const img = vehicleImgMode[v.id] === 'none' ? null : direct
               const selected = draft.vehicleId === v.id
               return (
                 <button
@@ -250,13 +243,8 @@ export default function NewEntryPage() {
                         src={img}
                         alt={v.name}
                         loading="lazy"
-                        crossOrigin="anonymous"
                         onError={() => {
-                          setVehicleImgMode((m) => {
-                            const cur = m[v.id] ?? (cfg.useProxy ? 'proxy' : 'direct')
-                            if (cur === 'direct' && cfg.useProxy) return { ...m, [v.id]: 'proxy' }
-                            return { ...m, [v.id]: 'none' }
-                          })
+                          setVehicleImgMode((m) => ({ ...m, [v.id]: 'none' }))
                         }}
                       />
                     ) : (
