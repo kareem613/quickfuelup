@@ -235,9 +235,15 @@ export default function NewEntryPage() {
           <strong>2) Pump photo</strong>
           <span className="muted">{draft.pumpImage ? 'Done' : 'Required'}</span>
         </div>
-        <div className="image-preview">
+        <label
+          className={`image-preview clickable${!draft.vehicleId || submitBusy ? ' disabled' : ''}`}
+          aria-disabled={!draft.vehicleId || submitBusy}
+        >
           {pumpUrl ? (
-            <img src={pumpUrl} alt="Pump preview" />
+            <>
+              <img src={pumpUrl} alt="Pump preview" />
+              <div className="image-overlay">Tap to replace</div>
+            </>
           ) : (
             <div className="image-placeholder">
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -247,29 +253,21 @@ export default function NewEntryPage() {
                   strokeWidth="1.6"
                   strokeLinejoin="round"
                 />
-                <path
-                  d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                />
+                <path d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" stroke="currentColor" strokeWidth="1.6" />
               </svg>
-              <div>Choose a pump photo</div>
+              <div>{draft.pumpImage ? 'Replace pump photo' : 'Tap to choose pump photo'}</div>
             </div>
           )}
-        </div>
-        <div className="field">
-          <label>Pump photo (total + quantity)</label>
           <input
+            className="sr-only"
             type="file"
             accept="image/*"
             onChange={(e) => onFileChange('pumpImage', e.target.files?.[0] ?? null)}
             disabled={!draft.vehicleId || submitBusy}
           />
-          <div className="muted">
-            {draft.pumpImage
-              ? `Selected: ${draft.pumpImage.type || 'image'} (${Math.round(draft.pumpImage.size / 1024)} KB)`
-              : ''}
-          </div>
+        </label>
+        <div className="muted">
+          {draft.pumpImage ? `Selected: ${draft.pumpImage.type || 'image'} (${Math.round(draft.pumpImage.size / 1024)} KB)` : ''}
         </div>
       </div>
 
@@ -278,9 +276,15 @@ export default function NewEntryPage() {
           <strong>3) Odometer photo</strong>
           <span className="muted">{draft.odometerImage ? 'Done' : 'Required'}</span>
         </div>
-        <div className="image-preview">
+        <label
+          className={`image-preview clickable${!draft.vehicleId || !draft.pumpImage || submitBusy ? ' disabled' : ''}`}
+          aria-disabled={!draft.vehicleId || !draft.pumpImage || submitBusy}
+        >
           {odoUrl ? (
-            <img src={odoUrl} alt="Odometer preview" />
+            <>
+              <img src={odoUrl} alt="Odometer preview" />
+              <div className="image-overlay">Tap to replace</div>
+            </>
           ) : (
             <div className="image-placeholder">
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -297,23 +301,21 @@ export default function NewEntryPage() {
                   strokeLinecap="round"
                 />
               </svg>
-              <div>Choose an odometer photo</div>
+              <div>{draft.odometerImage ? 'Replace odometer photo' : 'Tap to choose odometer photo'}</div>
             </div>
           )}
-        </div>
-        <div className="field">
-          <label>Odometer photo</label>
           <input
+            className="sr-only"
             type="file"
             accept="image/*"
             onChange={(e) => onFileChange('odometerImage', e.target.files?.[0] ?? null)}
             disabled={!draft.vehicleId || !draft.pumpImage || submitBusy}
           />
-          <div className="muted">
-            {draft.odometerImage
-              ? `Selected: ${draft.odometerImage.type || 'image'} (${Math.round(draft.odometerImage.size / 1024)} KB)`
-              : ''}
-          </div>
+        </label>
+        <div className="muted">
+          {draft.odometerImage
+            ? `Selected: ${draft.odometerImage.type || 'image'} (${Math.round(draft.odometerImage.size / 1024)} KB)`
+            : ''}
         </div>
       </div>
 
