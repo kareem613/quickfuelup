@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { loadConfig, saveConfig } from '../lib/config'
 import type { AppConfig, LlmProvider } from '../lib/types'
@@ -30,22 +30,28 @@ export default function SettingsPage() {
   const existing = useMemo(() => loadConfig(), [])
   const [baseUrl, setBaseUrl] = useState(existing?.baseUrl ?? '')
   const [lubeLoggerApiKey, setLubeLoggerApiKey] = useState(existing?.lubeLoggerApiKey ?? '')
-  const [defaultLlmProvider, setDefaultLlmProvider] = useState<LlmProvider>(existing?.llm.defaultProvider ?? 'gemini')
+  const [providerOrder, setProviderOrder] = useState<LlmProvider[]>(() => {
+    const raw = existing?.llm.providerOrder ?? (['gemini', 'anthropic'] as const)
+    const unique = Array.from(new Set(raw.filter((p) => p === 'gemini' || p === 'anthropic')))
+    // Always show both options so users can order before entering keys.
+    if (!unique.includes('gemini')) unique.push('gemini')
+    if (!unique.includes('anthropic')) unique.push('anthropic')
+    return unique as LlmProvider[]
+  })
   const [geminiApiKey, setGeminiApiKey] = useState(existing?.llm.geminiApiKey ?? '')
   const [anthropicApiKey, setAnthropicApiKey] = useState(existing?.llm.anthropicApiKey ?? '')
   const [cultureInvariant, setCultureInvariant] = useState(existing?.cultureInvariant ?? true)
   const [testResult, setTestResult] = useState<string | null>(null)
   const [busyTest, setBusyTest] = useState(false)
   const [connectedAs, setConnectedAs] = useState<{ username: string; isAdmin: boolean } | null>(null)
+  const dragProviderRef = useRef<LlmProvider | null>(null)
 
   useEffect(() => {
     document.title = 'QuickFuelUp - Settings'
   }, [])
 
   const hasAnyLlmKey = Boolean(geminiApiKey.trim() || anthropicApiKey.trim())
-  const defaultProviderKey =
-    defaultLlmProvider === 'anthropic' ? anthropicApiKey.trim() : geminiApiKey.trim()
-  const canSave = Boolean(baseUrl.trim() && lubeLoggerApiKey.trim() && (!hasAnyLlmKey || defaultProviderKey))
+  const canSave = Boolean(baseUrl.trim() && lubeLoggerApiKey.trim())
 
   const cfg: AppConfig | null = canSave
     ? {
@@ -54,7 +60,7 @@ export default function SettingsPage() {
         cultureInvariant,
         useProxy: false,
         llm: {
-          defaultProvider: defaultLlmProvider,
+          providerOrder,
           ...(geminiApiKey.trim() ? { geminiApiKey: geminiApiKey.trim() } : null),
           ...(anthropicApiKey.trim() ? { anthropicApiKey: anthropicApiKey.trim() } : null),
         },
@@ -172,6 +178,21 @@ export default function SettingsPage() {
     navigate('/new')
   }
 
+  function providerLabel(p: LlmProvider) {
+    return p === 'anthropic' ? 'Anthropic' : 'Gemini'
+  }
+
+  function moveProvider(from: number, to: number) {
+    setProviderOrder((prev) => {
+      if (from === to) return prev
+      const next = prev.slice()
+      const [item] = next.splice(from, 1)
+      if (!item) return prev
+      next.splice(to, 0, item)
+      return next
+    })
+  }
+
   return (
     <div className="container stack">
       <div className="row">
@@ -215,11 +236,59 @@ export default function SettingsPage() {
         </label>
 
         <div className="field">
-          <label>Default LLM</label>
-          <select value={defaultLlmProvider} onChange={(e) => setDefaultLlmProvider(e.target.value as LlmProvider)}>
-            <option value="gemini">Gemini</option>
-            <option value="anthropic">Anthropic</option>
-          </select>
+          <label>LLM order (drag to reorder)</label>
+          <div className="stack" style={{ gap: 8 }}>
+            {providerOrder.map((p, idx) => (
+              <div
+                key={p}
+                className="row"
+                draggable
+                onDragStart={(e) => {
+                  dragProviderRef.current = p
+                  e.dataTransfer.effectAllowed = 'move'
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'move'
+                }}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  const fromProvider = dragProviderRef.current
+                  dragProviderRef.current = null
+                  if (!fromProvider) return
+                  const from = providerOrder.indexOf(fromProvider)
+                  if (from < 0) return
+                  moveProvider(from, idx)
+                }}
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: 10,
+                  border: '1px solid rgba(255, 255, 255, 0.14)',
+                  background: 'rgba(0, 0, 0, 0.18)',
+                  cursor: 'grab',
+                }}
+                aria-label={`LLM priority ${idx + 1}: ${providerLabel(p)}`}
+                title="Drag to reorder"
+              >
+                <strong>
+                  {idx + 1}. {providerLabel(p)}
+                </strong>
+                <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                  <button className="btn small" type="button" disabled={idx === 0} onClick={() => moveProvider(idx, idx - 1)}>
+                    ↑
+                  </button>
+                  <button
+                    className="btn small"
+                    type="button"
+                    disabled={idx === providerOrder.length - 1}
+                    onClick={() => moveProvider(idx, idx + 1)}
+                  >
+                    ↓
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="field">
@@ -244,9 +313,7 @@ export default function SettingsPage() {
           />
         </div>
 
-        {!canSave && hasAnyLlmKey && !defaultProviderKey ? (
-          <div className="muted">Enter an API key for your selected default LLM (or clear both keys to use manual entry only).</div>
-        ) : null}
+        {!hasAnyLlmKey ? <div className="muted">No LLM keys set. You can still enter values manually.</div> : null}
 
         <div className="actions">
           <button

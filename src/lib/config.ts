@@ -25,14 +25,27 @@ export function loadConfig(): AppConfig | null {
           : undefined
     const anthropicApiKey = typeof llmObj.anthropicApiKey === 'string' ? llmObj.anthropicApiKey : undefined
 
-    const defaultProvider =
+    const providerOrderRaw = Array.isArray(llmObj.providerOrder) ? llmObj.providerOrder : null
+    const providerOrderFromCfg = providerOrderRaw
+      ? providerOrderRaw.filter((p): p is 'gemini' | 'anthropic' => p === 'gemini' || p === 'anthropic')
+      : []
+
+    // Legacy v2 shape used defaultProvider; convert to providerOrder.
+    const legacyDefaultProvider =
       llmObj.defaultProvider === 'anthropic' || llmObj.defaultProvider === 'gemini'
         ? (llmObj.defaultProvider as 'anthropic' | 'gemini')
-        : geminiApiKey
-          ? 'gemini'
-          : anthropicApiKey
-            ? 'anthropic'
-            : 'gemini'
+        : null
+    const providerOrderFromLegacyDefault = legacyDefaultProvider
+      ? [legacyDefaultProvider, legacyDefaultProvider === 'gemini' ? 'anthropic' : 'gemini']
+      : []
+
+    const providerOrder = (
+      providerOrderFromCfg.length > 0
+        ? providerOrderFromCfg
+        : providerOrderFromLegacyDefault.length > 0
+          ? providerOrderFromLegacyDefault
+          : ['gemini', 'anthropic']
+    ) as AppConfig['llm']['providerOrder']
 
     return {
       baseUrl: String(parsed.baseUrl).replace(/\/+$/, ''),
@@ -40,7 +53,7 @@ export function loadConfig(): AppConfig | null {
       cultureInvariant: parsed.cultureInvariant === undefined ? true : Boolean(parsed.cultureInvariant),
       useProxy: Boolean(parsed.useProxy),
       llm: {
-        defaultProvider,
+        providerOrder,
         ...(geminiApiKey ? { geminiApiKey: String(geminiApiKey) } : null),
         ...(anthropicApiKey ? { anthropicApiKey: String(anthropicApiKey) } : null),
       },

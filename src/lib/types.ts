@@ -6,7 +6,7 @@ export type AppConfig = {
   cultureInvariant: boolean
   useProxy: boolean
   llm: {
-    defaultProvider: LlmProvider
+    providerOrder: LlmProvider[]
     geminiApiKey?: string
     anthropicApiKey?: string
   }
