@@ -12,6 +12,15 @@ function numberOrEmpty(n: number | undefined) {
   return typeof n === 'number' && Number.isFinite(n) ? String(n) : ''
 }
 
+function llmMessageFromGeminiError(e: unknown): string | null {
+  const msg = e instanceof Error ? e.message : String(e)
+  const prefixes = ['Gemini did not return JSON:', 'Gemini response did not match schema:']
+  for (const p of prefixes) {
+    if (msg.startsWith(p)) return msg.slice(p.length).trim() || null
+  }
+  return null
+}
+
 function DoneIcon() {
   return (
     <span className="status-icon muted" aria-label="Done">
@@ -62,6 +71,8 @@ export default function NewEntryPage() {
   const [imageBusy, setImageBusy] = useState(false)
   const [extractBusy, setExtractBusy] = useState(false)
   const [submitBusy, setSubmitBusy] = useState(false)
+  const [extractFailed, setExtractFailed] = useState(false)
+  const [extractLlmMessage, setExtractLlmMessage] = useState<string | null>(null)
   const lastExtractSigRef = useRef<string>('')
   const [successOpen, setSuccessOpen] = useState(false)
 
@@ -126,6 +137,8 @@ export default function NewEntryPage() {
     if (!file) return
     setImageBusy(true)
     setError(null)
+    setExtractFailed(false)
+    setExtractLlmMessage(null)
     try {
       const compressed = await compressImage(file, { maxDimension: 1600, quality: 0.85 })
       setDraft((d) => ({
@@ -188,6 +201,8 @@ export default function NewEntryPage() {
     ;(async () => {
       setExtractBusy(true)
       setError(null)
+      setExtractFailed(false)
+      setExtractLlmMessage(null)
       try {
         const extracted = await extractFromImages({
           apiKey: geminiApiKey,
@@ -208,7 +223,8 @@ export default function NewEntryPage() {
           },
         }))
       } catch (e) {
-        setError(String(e))
+        setExtractFailed(true)
+        setExtractLlmMessage(llmMessageFromGeminiError(e))
       } finally {
         setExtractBusy(false)
       }
@@ -327,21 +343,23 @@ export default function NewEntryPage() {
             {vehicles.map((v) => {
               const selected = draft.vehicleId === v.id
               return (
-                <button
-                  key={v.id}
-                  className={`vehicle-card${selected ? ' selected' : ''}`}
-                  onClick={() =>
-                    setDraft((d) => ({
-                      ...d,
-                      vehicleId: v.id,
-                      extracted: undefined,
-                    }))
-                  }
-                  disabled={submitBusy}
-                  type="button"
-                >
-                  <div className="vehicle-name">{v.name}</div>
-                </button>
+                  <button
+                    key={v.id}
+                    className={`vehicle-card${selected ? ' selected' : ''}`}
+                    onClick={() => {
+                      setExtractFailed(false)
+                      setExtractLlmMessage(null)
+                      setDraft((d) => ({
+                        ...d,
+                        vehicleId: v.id,
+                        extracted: undefined,
+                      }))
+                    }}
+                    disabled={submitBusy}
+                    type="button"
+                  >
+                    <div className="vehicle-name">{v.name}</div>
+                  </button>
               )
             })}
           </div>
@@ -472,6 +490,8 @@ export default function NewEntryPage() {
               disabled={!canExtract || extractBusy || submitBusy}
               onClick={() => {
                 lastExtractSigRef.current = ''
+                setExtractFailed(false)
+                setExtractLlmMessage(null)
                 setDraft((d) => ({ ...d, extracted: undefined }))
               }}
               type="button"
@@ -482,6 +502,17 @@ export default function NewEntryPage() {
             </button>
           </div>
         </div>
+
+        {extractFailed ? (
+          <div className="error">
+            <div>Failed to extract values. Enter manually or try again.</div>
+            {extractLlmMessage ? (
+              <div className="muted" style={{ marginTop: 6 }}>
+                {extractLlmMessage.length > 500 ? `${extractLlmMessage.slice(0, 500)}…` : extractLlmMessage}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="field">
           <label>Odometer</label>
@@ -591,6 +622,8 @@ export default function NewEntryPage() {
             onClick={async () => {
               await clearDraft()
               lastExtractSigRef.current = ''
+              setExtractFailed(false)
+              setExtractLlmMessage(null)
               setDraft({ date: todayISODate(), form: { isfilltofull: true, missedfuelup: false } })
             }}
             type="button"
