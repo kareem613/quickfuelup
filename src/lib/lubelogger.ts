@@ -41,7 +41,18 @@ export async function getVehicles(cfg: AppConfig): Promise<Vehicle[]> {
       const obj = v as Record<string, unknown>
       const id = Number(obj.id)
       if (!Number.isFinite(id)) return null
-      const name = String(obj.name ?? obj.description ?? `Vehicle ${id}`)
+      const byName = obj.name ?? obj.description
+      const year = typeof obj.year === 'number' ? obj.year : Number(obj.year)
+      const make = typeof obj.make === 'string' ? obj.make : undefined
+      const model = typeof obj.model === 'string' ? obj.model : undefined
+      const plate = typeof obj.licensePlate === 'string' ? obj.licensePlate : undefined
+      const baseLabel = [Number.isFinite(year) ? String(year) : null, make ?? null, model ?? null]
+        .filter(Boolean)
+        .join(' ')
+
+      const derived = baseLabel ? `${baseLabel}${plate ? ` (${plate})` : ''}` : plate ? `Vehicle ${id} (${plate})` : null
+
+      const name = String(byName ?? derived ?? `Vehicle ${id}`)
       return { id, name }
     })
     .filter((v): v is Vehicle => v !== null)

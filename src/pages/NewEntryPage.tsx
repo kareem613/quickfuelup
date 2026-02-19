@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { loadConfig } from '../lib/config'
 import { todayISODate } from '../lib/date'
@@ -9,7 +9,8 @@ import type { Draft, Vehicle } from '../lib/types'
 
 export default function NewEntryPage() {
   const navigate = useNavigate()
-  const cfg = loadConfig()
+  // Avoid re-loading config object every render (prevents effect loops).
+  const cfg = useMemo(() => loadConfig(), [])
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [draft, setDraft] = useState<Draft>({ date: todayISODate() })
