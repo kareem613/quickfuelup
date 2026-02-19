@@ -1,10 +1,15 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { z } from 'zod'
 
+const NullableNumber = z.preprocess(
+  (v) => (v === '' || v === undefined ? null : v),
+  z.coerce.number().nullable()
+)
+
 const ExtractionSchema = z.object({
-  odometer: z.number().nullable(),
-  fuelQuantity: z.number().nullable(),
-  totalCost: z.number().nullable(),
+  odometer: NullableNumber,
+  fuelQuantity: NullableNumber,
+  totalCost: NullableNumber,
   explanation: z.string().nullable().optional(),
 })
 

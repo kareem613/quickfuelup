@@ -16,7 +16,12 @@ function llmMessageFromGeminiError(e: unknown): string | null {
   const msg = e instanceof Error ? e.message : String(e)
   const prefixes = ['Gemini did not return JSON:', 'Gemini response did not match schema:']
   for (const p of prefixes) {
-    if (msg.startsWith(p)) return msg.slice(p.length).trim() || null
+    if (msg.startsWith(p)) {
+      const sliced = msg.slice(p.length).trim()
+      // Avoid leaking raw JSON blobs into the UI (keeps messaging short).
+      if (sliced.startsWith('{') || sliced.startsWith('[')) return null
+      return sliced || null
+    }
   }
   return null
 }
@@ -73,6 +78,8 @@ export default function NewEntryPage() {
   const [submitBusy, setSubmitBusy] = useState(false)
   const [extractFailed, setExtractFailed] = useState(false)
   const [extractLlmMessage, setExtractLlmMessage] = useState<string | null>(null)
+  const [forceExtractTick, setForceExtractTick] = useState(0)
+  const lastForceExtractTickRef = useRef(0)
   const lastExtractSigRef = useRef<string>('')
   const [successOpen, setSuccessOpen] = useState(false)
 
@@ -192,14 +199,13 @@ export default function NewEntryPage() {
   useEffect(() => {
     if (!cfg) return
     if (!canExtract) return
-    // Don't auto-overwrite if the user has started entering values manually.
+    const forced = forceExtractTick !== lastForceExtractTickRef.current
+    // Don't auto-overwrite if the user has started entering values manually (unless forced via Retry).
     if (
-      typeof form.odometer === 'number' ||
-      typeof form.fuelconsumed === 'number' ||
-      typeof form.cost === 'number'
-    ) {
+      !forced &&
+      (typeof form.odometer === 'number' || typeof form.fuelconsumed === 'number' || typeof form.cost === 'number')
+    )
       return
-    }
     if (imageBusy || extractBusy || submitBusy) return
     if (draft.extracted) return
 
@@ -208,6 +214,7 @@ export default function NewEntryPage() {
     lastExtractSigRef.current = sig
 
     ;(async () => {
+      if (forced) lastForceExtractTickRef.current = forceExtractTick
       setExtractBusy(true)
       setError(null)
       setExtractFailed(false)
@@ -246,7 +253,20 @@ export default function NewEntryPage() {
         setExtractBusy(false)
       }
     })()
-  }, [canExtract, cfg, draft.date, draft.extracted, draft.odometerImage, draft.pumpImage, draft.vehicleId, extractBusy, geminiApiKey, imageBusy, submitBusy])
+  }, [
+    canExtract,
+    cfg,
+    draft.date,
+    draft.extracted,
+    draft.odometerImage,
+    draft.pumpImage,
+    draft.vehicleId,
+    extractBusy,
+    forceExtractTick,
+    geminiApiKey,
+    imageBusy,
+    submitBusy,
+  ])
 
   const canSubmit =
     Boolean(draft.vehicleId) &&
@@ -507,19 +527,12 @@ export default function NewEntryPage() {
               disabled={!canExtract || extractBusy || submitBusy}
               onClick={() => {
                 lastExtractSigRef.current = ''
+                setForceExtractTick((n) => n + 1)
                 setExtractFailed(false)
                 setExtractLlmMessage(null)
                 setDraft((d) => ({
                   ...d,
                   extracted: undefined,
-                  form: {
-                    ...(d.form ?? { isfilltofull: true, missedfuelup: false }),
-                    odometer: undefined,
-                    fuelconsumed: undefined,
-                    cost: undefined,
-                    isfilltofull: d.form?.isfilltofull ?? true,
-                    missedfuelup: d.form?.missedfuelup ?? false,
-                  },
                 }))
               }}
               type="button"
