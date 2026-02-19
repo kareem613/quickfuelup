@@ -8,6 +8,12 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -26,6 +32,7 @@ textarea {
 
 .container {
   max-width: 720px;
+  width: 100%;
   margin: 0 auto;
   padding: 16px;
 }
@@ -42,6 +49,8 @@ textarea {
   gap: 12px;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .stack {
@@ -53,6 +62,11 @@ textarea {
 .grid {
   display: grid;
   gap: 12px;
+  min-width: 0;
+}
+
+.grid > * {
+  min-width: 0;
 }
 
 .grid.two {
@@ -77,11 +91,14 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
 }
 
 .field input,
 .field select,
 .field textarea {
+  width: 100%;
+  max-width: 100%;
   padding: 10px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.18);
