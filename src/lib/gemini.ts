@@ -22,7 +22,13 @@ export async function extractFromImages(params: {
 }) {
   const genAI = new GoogleGenerativeAI(params.apiKey)
   // Gemini model names vary by account/API version; try a small, explicit fallback list.
-  const modelNames = ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash'] as const
+  const modelNames = [
+    'gemini-2.0-flash',
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-pro-latest',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+  ] as const
 
   const prompt = `
 You will be given two photos:
@@ -47,10 +53,28 @@ Rules:
     blobToBase64(params.odometerImage),
   ])
 
+  function parseJsonFromText(text: string): unknown {
+    try {
+      return JSON.parse(text)
+    } catch {
+      const start = text.indexOf('{')
+      const end = text.lastIndexOf('}')
+      if (start >= 0 && end > start) {
+        const slice = text.slice(start, end + 1)
+        return JSON.parse(slice)
+      }
+      throw new Error(`Gemini did not return JSON: ${text}`)
+    }
+  }
+
   let lastErr: unknown
   for (const name of modelNames) {
     try {
-      const model = genAI.getGenerativeModel({ model: name })
+      const model = genAI.getGenerativeModel({
+        model: name,
+        // When supported, this makes the SDK return JSON without extra text.
+        generationConfig: { responseMimeType: 'application/json' },
+      })
       const result = await model.generateContent([
         { text: prompt },
         { inlineData: { data: pumpB64, mimeType: params.pumpImage.type || 'image/jpeg' } },
@@ -58,7 +82,7 @@ Rules:
       ])
 
       const text = result.response.text().trim()
-      const json = JSON.parse(text) as unknown
+      const json = parseJsonFromText(text)
       const parsed = ExtractionSchema.safeParse(json)
       if (!parsed.success) throw new Error(`Gemini response did not match schema: ${text}`)
       return { ...parsed.data, rawJson: json }
