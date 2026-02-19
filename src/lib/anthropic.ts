@@ -47,11 +47,10 @@ Rules:
   let lastErr: unknown
   for (const model of modelNames) {
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/anthropic/messages', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'anthropic-version': '2023-06-01',
           'x-api-key': params.apiKey,
         },
         body: JSON.stringify({
