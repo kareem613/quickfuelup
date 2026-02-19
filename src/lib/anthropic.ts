@@ -38,87 +38,67 @@ Rules:
     blobToBase64(params.odometerImage),
   ])
 
-  const modelNames = [
-    'claude-3-5-haiku-latest',
-    'claude-3-5-sonnet-latest',
-    'claude-3-haiku-20240307',
-  ] as const
-
-  let lastErr: unknown
-  for (const model of modelNames) {
-    try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-          'x-api-key': params.apiKey,
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 300,
-          messages: [
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+      'x-api-key': params.apiKey,
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5',
+      max_tokens: 300,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
             {
-              role: 'user',
-              content: [
-                { type: 'text', text: prompt },
-                {
-                  type: 'image',
-                  source: {
-                    type: 'base64',
-                    media_type: params.pumpImage.type || 'image/jpeg',
-                    data: pumpB64,
-                  },
-                },
-                {
-                  type: 'image',
-                  source: {
-                    type: 'base64',
-                    media_type: params.odometerImage.type || 'image/jpeg',
-                    data: odoB64,
-                  },
-                },
-              ],
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: params.pumpImage.type || 'image/jpeg',
+                data: pumpB64,
+              },
+            },
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: params.odometerImage.type || 'image/jpeg',
+                data: odoB64,
+              },
             },
           ],
-        }),
-      })
+        },
+      ],
+    }),
+  })
 
-      const text = (await res.text()).trim()
-      if (!res.ok) throw new Error(`Anthropic HTTP ${res.status}: ${text}`)
+  const text = (await res.text()).trim()
+  if (!res.ok) throw new Error(`Anthropic HTTP ${res.status}: ${text}`)
 
-      const data = JSON.parse(text) as unknown
-      const content =
-        typeof data === 'object' && data !== null && Array.isArray((data as Record<string, unknown>).content)
-          ? ((data as Record<string, unknown>).content as unknown[])
-          : []
-      const joined = content
-        .map((c) => {
-          if (typeof c !== 'object' || c === null) return null
-          const obj = c as Record<string, unknown>
-          if (obj.type !== 'text') return null
-          return typeof obj.text === 'string' ? obj.text : null
-        })
-        .filter((t): t is string => Boolean(t))
-        .join('\n')
-        .trim()
+  const data = JSON.parse(text) as unknown
+  const content =
+    typeof data === 'object' && data !== null && Array.isArray((data as Record<string, unknown>).content)
+      ? ((data as Record<string, unknown>).content as unknown[])
+      : []
+  const joined = content
+    .map((c) => {
+      if (typeof c !== 'object' || c === null) return null
+      const obj = c as Record<string, unknown>
+      if (obj.type !== 'text') return null
+      return typeof obj.text === 'string' ? obj.text : null
+    })
+    .filter((t): t is string => Boolean(t))
+    .join('\n')
+    .trim()
 
-      if (!joined) throw new Error(`Anthropic did not return text: ${text}`)
+  if (!joined) throw new Error(`Anthropic did not return text: ${text}`)
 
-      const json = parseJsonFromText(joined, 'Anthropic did not return JSON')
-      const parsed = ExtractionSchema.safeParse(json)
-      if (!parsed.success) throw new Error(`Anthropic response did not match schema: ${joined}`)
-      return { ...parsed.data, rawJson: json }
-    } catch (e) {
-      const msg = String(e)
-      if (msg.includes('model') && msg.includes('not') && msg.includes('found')) {
-        lastErr = e
-        continue
-      }
-      throw e
-    }
-  }
-
-  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr))
+  const json = parseJsonFromText(joined, 'Anthropic did not return JSON')
+  const parsed = ExtractionSchema.safeParse(json)
+  if (!parsed.success) throw new Error(`Anthropic response did not match schema: ${joined}`)
+  return { ...parsed.data, rawJson: json }
 }
