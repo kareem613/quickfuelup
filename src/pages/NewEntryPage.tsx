@@ -326,50 +326,39 @@ export default function NewEntryPage() {
 
       <div className="card stack" style={{ opacity: canExtract ? 1 : 0.6 }}>
         <div className="row">
-          <strong>4) Review & submit</strong>
-          <span className="muted">
-            {imageBusy ? 'Processing…' : extractBusy ? 'Extracting…' : canSubmit ? 'Ready' : 'Waiting'}
-          </span>
+          <strong>4) Extract</strong>
+          <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
+            <span className="muted">
+              {imageBusy ? 'Processing…' : extractBusy ? 'Extracting…' : canSubmit ? 'Ready' : 'Waiting'}
+            </span>
+            <button
+              className="btn small"
+              disabled={!canExtract || extractBusy || submitBusy}
+              onClick={() => {
+                lastExtractSigRef.current = ''
+                setDraft((d) => ({ ...d, extracted: undefined }))
+              }}
+              type="button"
+            >
+              Retry extract
+            </button>
+          </div>
         </div>
 
-        <div className="grid two">
-          <div className="field">
-            <div className="row" style={{ justifyContent: 'space-between' }}>
-              <label>Date</label>
-              <button
-                className="btn small"
-                disabled={!canExtract || extractBusy || submitBusy}
-                onClick={() => {
-                  lastExtractSigRef.current = ''
-                  setDraft((d) => ({ ...d, extracted: undefined }))
-                }}
-                type="button"
-              >
-                Retry extract
-              </button>
-            </div>
-            <input
-              type="date"
-              value={draft.date}
-              onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
-              disabled={submitBusy}
-            />
-          </div>
-          <div className="field">
-            <label>Odometer</label>
-            <input
-              inputMode="numeric"
-              value={numberOrEmpty(form.odometer)}
-              onChange={(e) => {
-                const n = Number(e.target.value)
-                setDraft((d) => ({
-                  ...d,
-                  form: { ...form, odometer: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
-                }))
-              }}
-              disabled={!canExtract || submitBusy}
-            />
-          </div>
+        <div className="field">
+          <label>Odometer</label>
+          <input
+            inputMode="numeric"
+            value={numberOrEmpty(form.odometer)}
+            onChange={(e) => {
+              const n = Number(e.target.value)
+              setDraft((d) => ({
+                ...d,
+                form: { ...form, odometer: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
+              }))
+            }}
+            disabled={!canExtract || submitBusy}
+          />
         </div>
 
         <div className="grid two no-collapse">
@@ -403,6 +392,23 @@ export default function NewEntryPage() {
               disabled={!canExtract || submitBusy}
             />
           </div>
+        </div>
+      </div>
+
+      <div className="card stack" style={{ opacity: canExtract ? 1 : 0.6 }}>
+        <div className="row">
+          <strong>5) Details</strong>
+          <span className="muted">{draft.date}</span>
+        </div>
+
+        <div className="field">
+          <label>Date</label>
+          <input
+            type="date"
+            value={draft.date}
+            onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
+            disabled={submitBusy}
+          />
         </div>
 
         <div className="row" style={{ justifyContent: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
