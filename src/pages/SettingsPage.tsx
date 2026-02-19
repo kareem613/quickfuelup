@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { loadConfig, saveConfig } from '../lib/config'
-import type { AppConfig } from '../lib/types'
+import type { AppConfig, LlmProvider } from '../lib/types'
 
 function safeStringify(value: unknown) {
   try {
@@ -30,7 +30,9 @@ export default function SettingsPage() {
   const existing = useMemo(() => loadConfig(), [])
   const [baseUrl, setBaseUrl] = useState(existing?.baseUrl ?? '')
   const [lubeLoggerApiKey, setLubeLoggerApiKey] = useState(existing?.lubeLoggerApiKey ?? '')
-  const [geminiApiKey, setGeminiApiKey] = useState(existing?.geminiApiKey ?? '')
+  const [defaultLlmProvider, setDefaultLlmProvider] = useState<LlmProvider>(existing?.llm.defaultProvider ?? 'gemini')
+  const [geminiApiKey, setGeminiApiKey] = useState(existing?.llm.geminiApiKey ?? '')
+  const [anthropicApiKey, setAnthropicApiKey] = useState(existing?.llm.anthropicApiKey ?? '')
   const [cultureInvariant, setCultureInvariant] = useState(existing?.cultureInvariant ?? true)
   const [testResult, setTestResult] = useState<string | null>(null)
   const [busyTest, setBusyTest] = useState(false)
@@ -40,15 +42,22 @@ export default function SettingsPage() {
     document.title = 'QuickFuelUp - Settings'
   }, [])
 
-  const canSave = baseUrl.trim() && lubeLoggerApiKey.trim() && geminiApiKey.trim()
+  const hasAnyLlmKey = Boolean(geminiApiKey.trim() || anthropicApiKey.trim())
+  const defaultProviderKey =
+    defaultLlmProvider === 'anthropic' ? anthropicApiKey.trim() : geminiApiKey.trim()
+  const canSave = Boolean(baseUrl.trim() && lubeLoggerApiKey.trim() && (!hasAnyLlmKey || defaultProviderKey))
 
   const cfg: AppConfig | null = canSave
     ? {
         baseUrl: baseUrl.trim().replace(/\/+$/, ''),
         lubeLoggerApiKey: lubeLoggerApiKey.trim(),
-        geminiApiKey: geminiApiKey.trim(),
         cultureInvariant,
         useProxy: false,
+        llm: {
+          defaultProvider: defaultLlmProvider,
+          ...(geminiApiKey.trim() ? { geminiApiKey: geminiApiKey.trim() } : null),
+          ...(anthropicApiKey.trim() ? { anthropicApiKey: anthropicApiKey.trim() } : null),
+        },
       }
     : null
 
@@ -206,6 +215,14 @@ export default function SettingsPage() {
         </label>
 
         <div className="field">
+          <label>Default LLM</label>
+          <select value={defaultLlmProvider} onChange={(e) => setDefaultLlmProvider(e.target.value as LlmProvider)}>
+            <option value="gemini">Gemini</option>
+            <option value="anthropic">Anthropic</option>
+          </select>
+        </div>
+
+        <div className="field">
           <label>Gemini API Key</label>
           <input
             value={geminiApiKey}
@@ -215,6 +232,21 @@ export default function SettingsPage() {
             spellCheck={false}
           />
         </div>
+
+        <div className="field">
+          <label>Anthropic API Key</label>
+          <input
+            value={anthropicApiKey}
+            onChange={(e) => setAnthropicApiKey(e.target.value)}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+        </div>
+
+        {!canSave && hasAnyLlmKey && !defaultProviderKey ? (
+          <div className="muted">Enter an API key for your selected default LLM (or clear both keys to use manual entry only).</div>
+        ) : null}
 
         <div className="actions">
           <button

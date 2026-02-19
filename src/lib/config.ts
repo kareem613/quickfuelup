@@ -1,19 +1,49 @@
 import type { AppConfig } from './types'
 
-const CONFIG_KEY = 'quickfuelup:config:v1'
+const CONFIG_KEY_V2 = 'quickfuelup:config:v2'
+const CONFIG_KEY_V1 = 'quickfuelup:config:v1'
 
 export function loadConfig(): AppConfig | null {
-  const raw = localStorage.getItem(CONFIG_KEY)
+  const raw = localStorage.getItem(CONFIG_KEY_V2) ?? localStorage.getItem(CONFIG_KEY_V1)
   if (!raw) return null
   try {
-    const parsed = JSON.parse(raw) as Partial<AppConfig>
-    if (!parsed.baseUrl || !parsed.lubeLoggerApiKey || !parsed.geminiApiKey) return null
+    const parsed = JSON.parse(raw) as Partial<AppConfig> & {
+      // Legacy v1 shape
+      geminiApiKey?: unknown
+      llm?: unknown
+    }
+    if (!parsed.baseUrl || !parsed.lubeLoggerApiKey) return null
+
+    const llmObj =
+      typeof parsed.llm === 'object' && parsed.llm !== null ? (parsed.llm as Record<string, unknown>) : {}
+
+    const geminiApiKey =
+      typeof llmObj.geminiApiKey === 'string'
+        ? llmObj.geminiApiKey
+        : typeof parsed.geminiApiKey === 'string'
+          ? parsed.geminiApiKey
+          : undefined
+    const anthropicApiKey = typeof llmObj.anthropicApiKey === 'string' ? llmObj.anthropicApiKey : undefined
+
+    const defaultProvider =
+      llmObj.defaultProvider === 'anthropic' || llmObj.defaultProvider === 'gemini'
+        ? (llmObj.defaultProvider as 'anthropic' | 'gemini')
+        : geminiApiKey
+          ? 'gemini'
+          : anthropicApiKey
+            ? 'anthropic'
+            : 'gemini'
+
     return {
       baseUrl: String(parsed.baseUrl).replace(/\/+$/, ''),
       lubeLoggerApiKey: String(parsed.lubeLoggerApiKey),
-      geminiApiKey: String(parsed.geminiApiKey),
-      cultureInvariant: Boolean(parsed.cultureInvariant),
+      cultureInvariant: parsed.cultureInvariant === undefined ? true : Boolean(parsed.cultureInvariant),
       useProxy: Boolean(parsed.useProxy),
+      llm: {
+        defaultProvider,
+        ...(geminiApiKey ? { geminiApiKey: String(geminiApiKey) } : null),
+        ...(anthropicApiKey ? { anthropicApiKey: String(anthropicApiKey) } : null),
+      },
     }
   } catch {
     return null
@@ -22,7 +52,7 @@ export function loadConfig(): AppConfig | null {
 
 export function saveConfig(cfg: AppConfig) {
   localStorage.setItem(
-    CONFIG_KEY,
+    CONFIG_KEY_V2,
     JSON.stringify({
       ...cfg,
       baseUrl: cfg.baseUrl.replace(/\/+$/, ''),

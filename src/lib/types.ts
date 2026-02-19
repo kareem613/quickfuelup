@@ -1,9 +1,15 @@
+export type LlmProvider = 'gemini' | 'anthropic'
+
 export type AppConfig = {
   baseUrl: string
   lubeLoggerApiKey: string
-  geminiApiKey: string
   cultureInvariant: boolean
   useProxy: boolean
+  llm: {
+    defaultProvider: LlmProvider
+    geminiApiKey?: string
+    anthropicApiKey?: string
+  }
 }
 
 export type Draft = {

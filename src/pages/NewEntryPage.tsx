@@ -3,10 +3,10 @@ import { Link } from 'react-router-dom'
 import { loadConfig } from '../lib/config'
 import { toMMDDYYYY, todayISODate } from '../lib/date'
 import { clearDraft, loadDraft, saveDraft } from '../lib/draft'
-import { extractFromImages } from '../lib/gemini'
 import { compressImage } from '../lib/image'
+import { extractFromImagesViaProvider } from '../lib/llm'
 import { addGasRecord, getVehicles } from '../lib/lubelogger'
-import type { Draft, Vehicle } from '../lib/types'
+import type { Draft, LlmProvider, Vehicle } from '../lib/types'
 
 function numberOrEmpty(n: number | undefined) {
   return typeof n === 'number' && Number.isFinite(n) ? String(n) : ''
@@ -14,7 +14,12 @@ function numberOrEmpty(n: number | undefined) {
 
 function llmMessageFromGeminiError(e: unknown): string | null {
   const msg = e instanceof Error ? e.message : String(e)
-  const prefixes = ['Gemini did not return JSON:', 'Gemini response did not match schema:']
+  const prefixes = [
+    'Gemini did not return JSON:',
+    'Gemini response did not match schema:',
+    'Anthropic did not return JSON:',
+    'Anthropic response did not match schema:',
+  ]
   for (const p of prefixes) {
     if (msg.startsWith(p)) {
       const sliced = msg.slice(p.length).trim()
@@ -67,7 +72,9 @@ function RefreshIcon() {
 export default function NewEntryPage() {
   // Avoid re-loading config object every render (prevents effect loops).
   const cfg = useMemo(() => loadConfig(), [])
-  const geminiApiKey = cfg?.geminiApiKey ?? ''
+  const [extractProviderOverride, setExtractProviderOverride] = useState<LlmProvider | null>(null)
+  const [retryPickerOpen, setRetryPickerOpen] = useState(false)
+  const [retryProvider, setRetryProvider] = useState<LlmProvider>(cfg?.llm.defaultProvider ?? 'gemini')
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [draft, setDraft] = useState<Draft>({ date: todayISODate() })
@@ -167,6 +174,9 @@ export default function NewEntryPage() {
   const canExtract = Boolean(draft.vehicleId && draft.pumpImage && draft.odometerImage)
   const canEditDetails = Boolean(draft.vehicleId)
   const form = draft.form ?? { isfilltofull: true, missedfuelup: false }
+  const hasGeminiKey = Boolean(cfg?.llm.geminiApiKey?.trim())
+  const hasAnthropicKey = Boolean(cfg?.llm.anthropicApiKey?.trim())
+  const hasMultipleProviders = hasGeminiKey && hasAnthropicKey
 
   const step1Done = Boolean(draft.vehicleId)
   const step2Done = Boolean(draft.pumpImage)
@@ -203,6 +213,9 @@ export default function NewEntryPage() {
     if (!cfg) return
     if (!canExtract) return
     const forced = forceExtractTick !== lastForceExtractTickRef.current
+    const provider = extractProviderOverride ?? cfg.llm.defaultProvider
+    const providerKey = provider === 'anthropic' ? cfg.llm.anthropicApiKey : cfg.llm.geminiApiKey
+    if (!providerKey?.trim() && !extractProviderOverride) return
     // Don't auto-overwrite if the user has started entering values manually (unless forced via Retry).
     if (
       !forced &&
@@ -223,8 +236,12 @@ export default function NewEntryPage() {
       setExtractFailed(false)
       setExtractLlmMessage(null)
       try {
-        const extracted = await extractFromImages({
-          apiKey: geminiApiKey,
+        const apiKey = providerKey
+        if (!apiKey?.trim()) throw new Error(`Missing ${provider === 'anthropic' ? 'Anthropic' : 'Gemini'} API key (Settings).`)
+
+        const extracted = await extractFromImagesViaProvider({
+          provider,
+          apiKey,
           pumpImage: draft.pumpImage!,
           odometerImage: draft.odometerImage!,
         })
@@ -252,9 +269,10 @@ export default function NewEntryPage() {
         }))
       } catch (e) {
         setExtractFailed(true)
-        setExtractLlmMessage(llmMessageFromGeminiError(e))
+        setExtractLlmMessage(llmMessageFromGeminiError(e) ?? (e instanceof Error ? e.message : String(e)))
       } finally {
         setExtractBusy(false)
+        if (forced && extractProviderOverride) setExtractProviderOverride(null)
       }
     })()
   }, [
@@ -266,8 +284,8 @@ export default function NewEntryPage() {
     draft.pumpImage,
     draft.vehicleId,
     extractBusy,
+    extractProviderOverride,
     forceExtractTick,
-    geminiApiKey,
     imageBusy,
     submitBusy,
   ])
@@ -360,6 +378,72 @@ export default function NewEntryPage() {
             >
               OK
             </button>
+          </div>
+        </div>
+      ) : null}
+
+      {retryPickerOpen ? (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Retry extraction provider"
+          onClick={() => setRetryPickerOpen(false)}
+        >
+          <div className="modal card stack" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: 0 }}>Retry with…</h3>
+            <div className="muted">
+              Default: <strong>{cfg.llm.defaultProvider}</strong>
+            </div>
+
+            <label className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
+              <input
+                type="radio"
+                name="retry-provider"
+                value="gemini"
+                checked={retryProvider === 'gemini'}
+                onChange={() => setRetryProvider('gemini')}
+                disabled={!hasGeminiKey}
+              />
+              <span>Gemini</span>
+            </label>
+
+            <label className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
+              <input
+                type="radio"
+                name="retry-provider"
+                value="anthropic"
+                checked={retryProvider === 'anthropic'}
+                onChange={() => setRetryProvider('anthropic')}
+                disabled={!hasAnthropicKey}
+              />
+              <span>Anthropic</span>
+            </label>
+
+            <div className="actions">
+              <button className="btn" type="button" onClick={() => setRetryPickerOpen(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn primary"
+                type="button"
+                disabled={
+                  extractBusy ||
+                  submitBusy ||
+                  (retryProvider === 'gemini' && !hasGeminiKey) ||
+                  (retryProvider === 'anthropic' && !hasAnthropicKey)
+                }
+                onClick={() => {
+                  setRetryPickerOpen(false)
+                  setExtractProviderOverride(retryProvider)
+                  lastExtractSigRef.current = ''
+                  setForceExtractTick((n) => n + 1)
+                  setDraft((d) => ({ ...d, extracted: undefined }))
+                }}
+              >
+                Retry
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
@@ -530,14 +614,16 @@ export default function NewEntryPage() {
               className="btn small"
               disabled={!canExtract || extractBusy || submitBusy}
               onClick={() => {
-                lastExtractSigRef.current = ''
-                setForceExtractTick((n) => n + 1)
                 setExtractFailed(false)
                 setExtractLlmMessage(null)
-                setDraft((d) => ({
-                  ...d,
-                  extracted: undefined,
-                }))
+                if (hasMultipleProviders && cfg) {
+                  setRetryProvider(extractProviderOverride ?? cfg.llm.defaultProvider)
+                  setRetryPickerOpen(true)
+                  return
+                }
+                lastExtractSigRef.current = ''
+                setForceExtractTick((n) => n + 1)
+                setDraft((d) => ({ ...d, extracted: undefined }))
               }}
               type="button"
               aria-label="Retry extraction"

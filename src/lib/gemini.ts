@@ -1,17 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import { z } from 'zod'
-
-const NullableNumber = z.preprocess(
-  (v) => (v === '' || v === undefined ? null : v),
-  z.coerce.number().nullable()
-)
-
-const ExtractionSchema = z.object({
-  odometer: NullableNumber,
-  fuelQuantity: NullableNumber,
-  totalCost: NullableNumber,
-  explanation: z.string().nullable().optional(),
-})
+import { ExtractionSchema, parseJsonFromText } from './extraction'
 
 async function blobToBase64(blob: Blob): Promise<string> {
   const arrayBuffer = await blob.arrayBuffer()
@@ -61,20 +49,6 @@ Rules:
     blobToBase64(params.odometerImage),
   ])
 
-  function parseJsonFromText(text: string): unknown {
-    try {
-      return JSON.parse(text)
-    } catch {
-      const start = text.indexOf('{')
-      const end = text.lastIndexOf('}')
-      if (start >= 0 && end > start) {
-        const slice = text.slice(start, end + 1)
-        return JSON.parse(slice)
-      }
-      throw new Error(`Gemini did not return JSON: ${text}`)
-    }
-  }
-
   let lastErr: unknown
   for (const name of modelNames) {
     try {
@@ -90,7 +64,7 @@ Rules:
       ])
 
       const text = result.response.text().trim()
-      const json = parseJsonFromText(text)
+      const json = parseJsonFromText(text, 'Gemini did not return JSON')
       const parsed = ExtractionSchema.safeParse(json)
       if (!parsed.success) throw new Error(`Gemini response did not match schema: ${text}`)
       return { ...parsed.data, rawJson: json }
