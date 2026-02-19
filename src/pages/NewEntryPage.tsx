@@ -498,7 +498,7 @@ export default function NewEntryPage() {
         )}
       </div>
 
-      <div className="card stack" style={{ opacity: canEditDetails ? 1 : 0.6 }}>
+      <div className={`card stack${extractBusy ? ' extracting' : ''}`} style={{ opacity: canEditDetails ? 1 : 0.6 }}>
         <div className="row">
           <strong>4) Fueling</strong>
           <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
