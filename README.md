@@ -38,3 +38,11 @@ npm run dev
 
 - This is a **client-only** app. Treat API keys as sensitive.
 - LubeLogger must be reachable from the browser; if you run it on your LAN, ensure HTTPS and CORS are compatible with browser requests.
+
+### CORS / “TypeError: Failed to fetch”
+
+Some LubeLogger deployments do not send `Access-Control-Allow-Origin`, which causes browsers to block cross-origin calls.
+
+To work around this, enable **“Use same-origin proxy”** in Settings and set this Vercel env var (then redeploy):
+
+`LUBELOGGER_PROXY_BASE_URL=https://your.lubelogger.host`

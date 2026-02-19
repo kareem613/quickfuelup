@@ -4,6 +4,12 @@ function withBaseUrl(baseUrl: string, path: string) {
   return `${baseUrl.replace(/\/+$/, '')}${path.startsWith('/') ? '' : '/'}${path}`
 }
 
+function apiUrl(cfg: AppConfig, path: string) {
+  // When using proxy, call same-origin Vercel function(s) at /api/lubelogger/*
+  if (cfg.useProxy) return withBaseUrl('', `/api/lubelogger${path}`)
+  return withBaseUrl(cfg.baseUrl, `/api${path}`)
+}
+
 function buildHeaders(cfg: AppConfig): HeadersInit {
   const headers: Record<string, string> = {
     'x-api-key': cfg.lubeLoggerApiKey,
@@ -13,7 +19,7 @@ function buildHeaders(cfg: AppConfig): HeadersInit {
 }
 
 export async function whoAmI(cfg: AppConfig) {
-  const res = await fetch(withBaseUrl(cfg.baseUrl, '/api/whoami'), {
+  const res = await fetch(apiUrl(cfg, '/whoami'), {
     headers: buildHeaders(cfg),
   })
   if (!res.ok) throw new Error(`whoami failed: ${res.status} ${await res.text()}`)
@@ -21,7 +27,7 @@ export async function whoAmI(cfg: AppConfig) {
 }
 
 export async function getVehicles(cfg: AppConfig): Promise<Vehicle[]> {
-  const res = await fetch(withBaseUrl(cfg.baseUrl, '/api/vehicles'), {
+  const res = await fetch(apiUrl(cfg, '/vehicles'), {
     headers: buildHeaders(cfg),
   })
   if (!res.ok) throw new Error(`vehicles failed: ${res.status} ${await res.text()}`)
@@ -53,7 +59,7 @@ export type AddGasRecordInput = {
 }
 
 export async function addGasRecord(cfg: AppConfig, input: AddGasRecordInput) {
-  const url = new URL(withBaseUrl(cfg.baseUrl, '/api/vehicle/gasrecords/add'))
+  const url = new URL(apiUrl(cfg, '/vehicle/gasrecords/add'), window.location.origin)
   url.searchParams.set('vehicleId', String(input.vehicleId))
 
   const res = await fetch(url.toString(), {

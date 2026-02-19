@@ -3,6 +3,7 @@ export type AppConfig = {
   lubeLoggerApiKey: string
   geminiApiKey: string
   cultureInvariant: boolean
+  useProxy: boolean
 }
 
 export type Draft = {
@@ -30,4 +31,3 @@ export type Vehicle = {
   id: number
   name: string
 }
-

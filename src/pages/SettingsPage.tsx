@@ -11,6 +11,7 @@ export default function SettingsPage() {
   const [lubeLoggerApiKey, setLubeLoggerApiKey] = useState(existing?.lubeLoggerApiKey ?? '')
   const [geminiApiKey, setGeminiApiKey] = useState(existing?.geminiApiKey ?? '')
   const [cultureInvariant, setCultureInvariant] = useState(existing?.cultureInvariant ?? true)
+  const [useProxy, setUseProxy] = useState(existing?.useProxy ?? false)
   const [testResult, setTestResult] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -26,6 +27,7 @@ export default function SettingsPage() {
         lubeLoggerApiKey: lubeLoggerApiKey.trim(),
         geminiApiKey: geminiApiKey.trim(),
         cultureInvariant,
+        useProxy,
       }
     : null
 
@@ -103,6 +105,17 @@ export default function SettingsPage() {
           <span>Send LubeLogger “culture-invariant” header</span>
         </label>
 
+        <label className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
+          <input type="checkbox" checked={useProxy} onChange={(e) => setUseProxy(e.target.checked)} />
+          <span>Use same-origin proxy (fixes CORS “Failed to fetch”)</span>
+        </label>
+
+        {useProxy && (
+          <div className="muted">
+            Proxy requires the Vercel env var <code>LUBELOGGER_PROXY_BASE_URL</code> to be set (then redeploy).
+          </div>
+        )}
+
         <div className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
           <button className="btn" onClick={onTest} disabled={!cfg || busy}>
             {busy ? 'Testing…' : 'Test connection'}
@@ -124,4 +137,3 @@ export default function SettingsPage() {
     </div>
   )
 }
-

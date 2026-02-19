@@ -13,6 +13,7 @@ export function loadConfig(): AppConfig | null {
       lubeLoggerApiKey: String(parsed.lubeLoggerApiKey),
       geminiApiKey: String(parsed.geminiApiKey),
       cultureInvariant: Boolean(parsed.cultureInvariant),
+      useProxy: Boolean(parsed.useProxy),
     }
   } catch {
     return null
@@ -28,4 +29,3 @@ export function saveConfig(cfg: AppConfig) {
     } satisfies AppConfig),
   )
 }
-
