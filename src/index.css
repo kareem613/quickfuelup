@@ -228,9 +228,35 @@ textarea {
   border-color: #2563eb;
 }
 
+.btn.success {
+  background: #16a34a;
+  border-color: #16a34a;
+}
+
 .btn.small {
   padding: 7px 10px;
   font-size: 0.92rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.18);
+  white-space: nowrap;
+}
+
+.badge.ok {
+  border-color: rgba(22, 163, 74, 0.6);
+  background: rgba(22, 163, 74, 0.15);
+}
+
+.badge.no {
+  border-color: rgba(148, 163, 184, 0.35);
 }
 
 .actions {

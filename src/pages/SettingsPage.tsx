@@ -34,6 +34,7 @@ export default function SettingsPage() {
   const [cultureInvariant, setCultureInvariant] = useState(existing?.cultureInvariant ?? true)
   const [testResult, setTestResult] = useState<string | null>(null)
   const [busyTest, setBusyTest] = useState(false)
+  const [connectedAs, setConnectedAs] = useState<{ username: string; isAdmin: boolean } | null>(null)
 
   useEffect(() => {
     document.title = 'QuickFuelUp - Settings'
@@ -94,14 +95,19 @@ export default function SettingsPage() {
         // keep as text
       }
 
-      setTestResult(
-        [
-          `OK (direct)`,
-          `url: ${url}`,
-          `whoami: ${safeStringify(parsed)}`,
-        ].join('\n'),
-      )
+      const username =
+        typeof parsed === 'object' && parsed !== null && typeof (parsed as Record<string, unknown>).username === 'string'
+          ? String((parsed as Record<string, unknown>).username)
+          : 'unknown'
+      const isAdmin =
+        typeof parsed === 'object' && parsed !== null && typeof (parsed as Record<string, unknown>).isAdmin === 'boolean'
+          ? Boolean((parsed as Record<string, unknown>).isAdmin)
+          : false
+
+      setConnectedAs({ username, isAdmin })
+      setTestResult(null)
     } catch (e) {
+      setConnectedAs(null)
       let noCorsProbe: string | null = null
       const isFailedToFetch =
         e instanceof Error && e.name === 'TypeError' && /failed to fetch/i.test(e.message ?? '')
@@ -137,10 +143,11 @@ export default function SettingsPage() {
     }
   }
 
-  async function onTestDirect() {
+  async function onTestConnection() {
     if (!cfg) return
     setBusyTest(true)
     setTestResult(null)
+    setConnectedAs(null)
     try {
       await testWhoami()
     } catch (e) {
@@ -210,13 +217,26 @@ export default function SettingsPage() {
         </div>
 
         <div className="actions">
-          <button className="btn" onClick={onTestDirect} disabled={!cfg || busyTest}>
-            {busyTest ? 'Testing…' : 'Test direct'}
+          <button
+            className={`btn${connectedAs ? ' success' : ''}`}
+            onClick={onTestConnection}
+            disabled={!cfg || busyTest}
+          >
+            {busyTest ? 'Testing…' : 'Test connection'}
           </button>
           <button className="btn primary" onClick={onSave} disabled={!cfg || busyTest}>
             Save
           </button>
         </div>
+
+        {connectedAs ? (
+          <div className="muted">
+            Connected as <strong>{connectedAs.username}</strong>{' '}
+            <span className={`badge ${connectedAs.isAdmin ? 'ok' : 'no'}`}>
+              admin: {connectedAs.isAdmin ? 'yes' : 'no'}
+            </span>
+          </div>
+        ) : null}
 
         {testResult && <div className={testResult.startsWith('OK') ? 'card' : 'error'}>{testResult}</div>}
       </div>
