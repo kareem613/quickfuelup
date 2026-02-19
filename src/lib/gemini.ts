@@ -21,7 +21,8 @@ export async function extractFromImages(params: {
   odometerImage: Blob
 }) {
   const genAI = new GoogleGenerativeAI(params.apiKey)
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  // Gemini model names vary by account/API version; try a small, explicit fallback list.
+  const modelNames = ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash'] as const
 
   const prompt = `
 You will be given two photos:
@@ -46,16 +47,31 @@ Rules:
     blobToBase64(params.odometerImage),
   ])
 
-  const result = await model.generateContent([
-    { text: prompt },
-    { inlineData: { data: pumpB64, mimeType: params.pumpImage.type || 'image/jpeg' } },
-    { inlineData: { data: odoB64, mimeType: params.odometerImage.type || 'image/jpeg' } },
-  ])
+  let lastErr: unknown
+  for (const name of modelNames) {
+    try {
+      const model = genAI.getGenerativeModel({ model: name })
+      const result = await model.generateContent([
+        { text: prompt },
+        { inlineData: { data: pumpB64, mimeType: params.pumpImage.type || 'image/jpeg' } },
+        { inlineData: { data: odoB64, mimeType: params.odometerImage.type || 'image/jpeg' } },
+      ])
 
-  const text = result.response.text().trim()
-  const json = JSON.parse(text) as unknown
-  const parsed = ExtractionSchema.safeParse(json)
-  if (!parsed.success) throw new Error(`Gemini response did not match schema: ${text}`)
-  return { ...parsed.data, rawJson: json }
+      const text = result.response.text().trim()
+      const json = JSON.parse(text) as unknown
+      const parsed = ExtractionSchema.safeParse(json)
+      if (!parsed.success) throw new Error(`Gemini response did not match schema: ${text}`)
+      return { ...parsed.data, rawJson: json }
+    } catch (e) {
+      const msg = String(e)
+      // Only fall back for explicit "model not found/unsupported" errors.
+      if (msg.includes('404') && (msg.includes('not found') || msg.includes('not supported'))) {
+        lastErr = e
+        continue
+      }
+      throw e
+    }
+  }
+
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr))
 }
-
