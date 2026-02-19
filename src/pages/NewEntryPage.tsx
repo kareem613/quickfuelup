@@ -329,7 +329,20 @@ export default function NewEntryPage() {
 
         <div className="grid two">
           <div className="field">
-            <label>Date</label>
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <label>Date</label>
+              <button
+                className="btn small"
+                disabled={!canExtract || extractBusy || submitBusy}
+                onClick={() => {
+                  lastExtractSigRef.current = ''
+                  setDraft((d) => ({ ...d, extracted: undefined }))
+                }}
+                type="button"
+              >
+                Retry extract
+              </button>
+            </div>
             <input
               type="date"
               value={draft.date}
@@ -354,7 +367,7 @@ export default function NewEntryPage() {
           </div>
         </div>
 
-        <div className="grid two">
+        <div className="grid two no-collapse">
           <div className="field">
             <label>Fuel quantity</label>
             <input
@@ -419,18 +432,8 @@ export default function NewEntryPage() {
           />
         </div>
 
-        <div className="row" style={{ justifyContent: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
-          <button
-            className="btn"
-            disabled={!canExtract || extractBusy || submitBusy}
-            onClick={() => {
-              lastExtractSigRef.current = ''
-              setDraft((d) => ({ ...d, extracted: undefined }))
-            }}
-          >
-            Retry extract
-          </button>
-          <button className="btn primary" disabled={!canSubmit || submitBusy || extractBusy} onClick={onSubmit}>
+        <div className="actions">
+          <button className="btn primary" disabled={!canSubmit || submitBusy || extractBusy} onClick={onSubmit} type="button">
             {submitBusy ? 'Submitting…' : 'Submit to LubeLogger'}
           </button>
           <button
@@ -441,8 +444,9 @@ export default function NewEntryPage() {
               lastExtractSigRef.current = ''
               setDraft({ date: todayISODate(), form: { isfilltofull: true, missedfuelup: false } })
             }}
+            type="button"
           >
-            Clear all
+            Start over
           </button>
         </div>
       </div>
