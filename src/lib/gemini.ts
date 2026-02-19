@@ -48,6 +48,7 @@ Rules:
 - Return only valid JSON (no markdown, no backticks).
 - Use '.' as decimal separator.
 - If you cannot determine a value, set it to null AND include a short explanation.
+- If a value can't be determined from an image, describe what that image appears to be (e.g. blurry dashboard, dark photo, receipt, random object), and end with a mildly sarcastic line like: "It's a photo of <what it looks like> — how do you expect me to read <missing value> from that?"
 `.trim()
 
   const [pumpB64, odoB64] = await Promise.all([
