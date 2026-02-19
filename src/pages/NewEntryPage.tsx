@@ -55,12 +55,14 @@ export default function NewEntryPage() {
       try {
         const [existingDraft, v] = await Promise.all([loadDraft(), getVehicles(cfg)])
         setVehicles(v)
-        setDraft(
+        const initial =
           existingDraft ?? {
             date: todayISODate(),
             form: { isfilltofull: true, missedfuelup: false },
-          },
-        )
+          }
+        // If there is only one vehicle, auto-select it (unless a draft already chose one).
+        const vehicleId = initial.vehicleId ?? (v.length === 1 ? v[0]?.id : undefined)
+        setDraft({ ...initial, vehicleId })
       } catch (e) {
         setError(String(e))
       } finally {
@@ -175,6 +177,13 @@ export default function NewEntryPage() {
     }
   }
 
+  function vehicleImageUrl(imageLocation?: string) {
+    if (!cfg) return null
+    if (!imageLocation) return null
+    if (/^https?:\/\//i.test(imageLocation)) return imageLocation
+    return `${cfg.baseUrl.replace(/\/+$/, '')}${imageLocation.startsWith('/') ? '' : '/'}${imageLocation}`
+  }
+
   if (!cfg) {
     return (
       <div className="container stack">
@@ -205,29 +214,54 @@ export default function NewEntryPage() {
           <strong>1) Select vehicle</strong>
           <span className="muted">{draft.vehicleId ? 'Done' : 'Required'}</span>
         </div>
-        <div className="field">
-          <label>Vehicle</label>
-          <select
-            value={draft.vehicleId ?? ''}
-            onChange={(e) =>
-              setDraft((d) => ({
-                ...d,
-                vehicleId: Number(e.target.value),
-                extracted: undefined,
-              }))
-            }
-            disabled={busy || submitBusy}
-          >
-            <option value="" disabled>
-              {busy ? 'Loading…' : 'Select a vehicle'}
-            </option>
-            {vehicles.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name} (#{v.id})
-              </option>
-            ))}
-          </select>
-        </div>
+        {busy ? (
+          <div className="muted">Loading vehicles…</div>
+        ) : (
+          <div className="vehicle-grid">
+            {vehicles.map((v) => {
+              const img = vehicleImageUrl(v.imageLocation)
+              const selected = draft.vehicleId === v.id
+              return (
+                <button
+                  key={v.id}
+                  className={`vehicle-card${selected ? ' selected' : ''}`}
+                  onClick={() =>
+                    setDraft((d) => ({
+                      ...d,
+                      vehicleId: v.id,
+                      extracted: undefined,
+                    }))
+                  }
+                  disabled={submitBusy}
+                  type="button"
+                >
+                  <div className="vehicle-thumb">
+                    {img ? (
+                      <img src={img} alt={v.name} loading="lazy" />
+                    ) : (
+                      <div className="image-placeholder">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path
+                            d="M7 7h3l1-2h2l1 2h3a2 2 0 0 1 2 2v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V9a2 2 0 0 1 2-2Z"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinejoin="round"
+                          />
+                          <path
+                            d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                          />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  <div className="vehicle-name">{v.name}</div>
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       <div className="card stack" style={{ opacity: draft.vehicleId ? 1 : 0.6 }}>

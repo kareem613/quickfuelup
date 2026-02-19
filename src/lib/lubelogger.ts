@@ -53,7 +53,8 @@ export async function getVehicles(cfg: AppConfig): Promise<Vehicle[]> {
       const derived = baseLabel ? `${baseLabel}${plate ? ` (${plate})` : ''}` : plate ? `Vehicle ${id} (${plate})` : null
 
       const name = String(byName ?? derived ?? `Vehicle ${id}`)
-      return { id, name }
+      const imageLocation = typeof obj.imageLocation === 'string' ? obj.imageLocation : undefined
+      return { id, name, imageLocation }
     })
     .filter((v): v is Vehicle => v !== null)
 }
