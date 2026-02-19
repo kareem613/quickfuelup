@@ -63,6 +63,7 @@ export default function NewEntryPage() {
   const [extractBusy, setExtractBusy] = useState(false)
   const [submitBusy, setSubmitBusy] = useState(false)
   const lastExtractSigRef = useRef<string>('')
+  const [successOpen, setSuccessOpen] = useState(false)
 
   const [card1Open, setCard1Open] = useState(true)
   const [card2Open, setCard2Open] = useState(true)
@@ -244,6 +245,7 @@ export default function NewEntryPage() {
       await clearDraft()
       setDraft({ date: todayISODate(), form: { isfilltofull: true, missedfuelup: false } })
       lastExtractSigRef.current = ''
+      setSuccessOpen(true)
       // Keep response in console for now; UX can add a toast later.
       console.log('Submitted', res)
     } catch (e) {
@@ -277,6 +279,33 @@ export default function NewEntryPage() {
       </div>
 
       {error && <div className="error">{error}</div>}
+      {successOpen ? (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Submission successful"
+          onClick={() => setSuccessOpen(false)}
+        >
+          <div className="modal card stack" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: 0 }}>Success!</h3>
+            <div>Fuel-up submitted to LubeLogger.</div>
+            <a href={cfg.baseUrl} target="_blank" rel="noopener noreferrer" className="btn">
+              Open LubeLogger
+            </a>
+            <button
+              className="btn primary"
+              type="button"
+              onClick={() => {
+                setSuccessOpen(false)
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className={`card stack${step1Done && !card1Open ? ' collapsed' : ''}`}>
         <button
