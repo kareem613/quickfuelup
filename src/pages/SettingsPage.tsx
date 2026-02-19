@@ -32,11 +32,7 @@ export default function SettingsPage() {
   const [lubeLoggerApiKey, setLubeLoggerApiKey] = useState(existing?.lubeLoggerApiKey ?? '')
   const [providerOrder, setProviderOrder] = useState<LlmProvider[]>(() => {
     const raw = existing?.llm.providerOrder ?? (['gemini', 'anthropic'] as const)
-    const unique = Array.from(new Set(raw.filter((p) => p === 'gemini' || p === 'anthropic')))
-    // Always show both options so users can order before entering keys.
-    if (!unique.includes('gemini')) unique.push('gemini')
-    if (!unique.includes('anthropic')) unique.push('anthropic')
-    return unique as LlmProvider[]
+    return Array.from(new Set(raw.filter((p) => p === 'gemini' || p === 'anthropic'))) as LlmProvider[]
   })
   const [geminiApiKey, setGeminiApiKey] = useState(existing?.llm.geminiApiKey ?? '')
   const [anthropicApiKey, setAnthropicApiKey] = useState(existing?.llm.anthropicApiKey ?? '')
@@ -46,6 +42,13 @@ export default function SettingsPage() {
   const [connectedAs, setConnectedAs] = useState<{ username: string; isAdmin: boolean } | null>(null)
   const dragProviderRef = useRef<LlmProvider | null>(null)
 
+  const activeProviders = useMemo(() => {
+    const keyFor = (p: LlmProvider) => (p === 'anthropic' ? anthropicApiKey.trim() : geminiApiKey.trim())
+    const ordered = providerOrder.filter((p) => keyFor(p))
+    const missing = (['gemini', 'anthropic'] as const).filter((p) => keyFor(p) && !ordered.includes(p))
+    return [...ordered, ...missing]
+  }, [anthropicApiKey, geminiApiKey, providerOrder])
+
   useEffect(() => {
     document.title = 'QuickFuelUp - Settings'
   }, [])
@@ -54,18 +57,18 @@ export default function SettingsPage() {
   const canSave = Boolean(baseUrl.trim() && lubeLoggerApiKey.trim())
 
   const cfg: AppConfig | null = canSave
-    ? {
-        baseUrl: baseUrl.trim().replace(/\/+$/, ''),
-        lubeLoggerApiKey: lubeLoggerApiKey.trim(),
-        cultureInvariant,
-        useProxy: false,
-        llm: {
-          providerOrder,
+      ? {
+          baseUrl: baseUrl.trim().replace(/\/+$/, ''),
+          lubeLoggerApiKey: lubeLoggerApiKey.trim(),
+          cultureInvariant,
+          useProxy: false,
+          llm: {
+          providerOrder: activeProviders,
           ...(geminiApiKey.trim() ? { geminiApiKey: geminiApiKey.trim() } : null),
           ...(anthropicApiKey.trim() ? { anthropicApiKey: anthropicApiKey.trim() } : null),
-        },
-      }
-    : null
+          },
+        }
+      : null
 
   function resolveWhoamiUrl() {
     if (!cfg) return null
@@ -185,7 +188,7 @@ export default function SettingsPage() {
   function moveProvider(from: number, to: number) {
     setProviderOrder((prev) => {
       if (from === to) return prev
-      const next = prev.slice()
+      const next = activeProviders.slice()
       const [item] = next.splice(from, 1)
       if (!item) return prev
       next.splice(to, 0, item)
@@ -238,7 +241,8 @@ export default function SettingsPage() {
         <div className="field">
           <label>LLM order (drag to reorder)</label>
           <div className="stack" style={{ gap: 8 }}>
-            {providerOrder.map((p, idx) => (
+            {activeProviders.length ? (
+              activeProviders.map((p, idx) => (
               <div
                 key={p}
                 className="row"
@@ -256,7 +260,7 @@ export default function SettingsPage() {
                   const fromProvider = dragProviderRef.current
                   dragProviderRef.current = null
                   if (!fromProvider) return
-                  const from = providerOrder.indexOf(fromProvider)
+                  const from = activeProviders.indexOf(fromProvider)
                   if (from < 0) return
                   moveProvider(from, idx)
                 }}
@@ -273,21 +277,11 @@ export default function SettingsPage() {
                 <strong>
                   {idx + 1}. {providerLabel(p)}
                 </strong>
-                <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
-                  <button className="btn small" type="button" disabled={idx === 0} onClick={() => moveProvider(idx, idx - 1)}>
-                    ↑
-                  </button>
-                  <button
-                    className="btn small"
-                    type="button"
-                    disabled={idx === providerOrder.length - 1}
-                    onClick={() => moveProvider(idx, idx + 1)}
-                  >
-                    ↓
-                  </button>
-                </div>
               </div>
-            ))}
+              ))
+            ) : (
+              <div className="muted">Add one or more LLM API keys below to enable extraction.</div>
+            )}
           </div>
         </div>
 
