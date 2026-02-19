@@ -32,9 +32,8 @@ export default function SettingsPage() {
   const [lubeLoggerApiKey, setLubeLoggerApiKey] = useState(existing?.lubeLoggerApiKey ?? '')
   const [geminiApiKey, setGeminiApiKey] = useState(existing?.geminiApiKey ?? '')
   const [cultureInvariant, setCultureInvariant] = useState(existing?.cultureInvariant ?? true)
-  const [useProxy, setUseProxy] = useState(existing?.useProxy ?? false)
   const [testResult, setTestResult] = useState<string | null>(null)
-  const [busyTest, setBusyTest] = useState<'proxy' | 'direct' | null>(null)
+  const [busyTest, setBusyTest] = useState(false)
 
   useEffect(() => {
     document.title = 'QuickFuelUp - Settings'
@@ -48,19 +47,18 @@ export default function SettingsPage() {
         lubeLoggerApiKey: lubeLoggerApiKey.trim(),
         geminiApiKey: geminiApiKey.trim(),
         cultureInvariant,
-        useProxy,
+        useProxy: false,
       }
     : null
 
-  function resolveWhoamiUrl(useProxyOverride: boolean) {
+  function resolveWhoamiUrl() {
     if (!cfg) return null
-    if (useProxyOverride) return new URL('/ll/whoami', window.location.origin).toString()
     return `${cfg.baseUrl.replace(/\/+$/, '')}/api/whoami`
   }
 
-  async function testWhoami(useProxyOverride: boolean) {
+  async function testWhoami() {
     if (!cfg) return
-    const url = resolveWhoamiUrl(useProxyOverride)
+    const url = resolveWhoamiUrl()
     if (!url) return
 
     const headers: Record<string, string> = {
@@ -72,33 +70,10 @@ export default function SettingsPage() {
       const res = await fetch(url, { headers })
       const text = await res.text()
 
-      const vercelMitigated = res.headers.get('x-vercel-mitigated')
-      const contentType = res.headers.get('content-type') ?? ''
-      const looksLikeCheckpoint =
-        vercelMitigated === 'challenge' || (contentType.includes('text/html') && /vercel security checkpoint/i.test(text))
-
       const bodyLength = text.length
       const maxBody = 2500
       const bodyPreview =
         bodyLength > maxBody ? `${text.slice(0, maxBody)}\n...[truncated ${bodyLength - maxBody} chars]...` : text
-
-      if (looksLikeCheckpoint) {
-        const verifyUrl = new URL('/ll/whoami', window.location.origin).toString()
-        setTestResult(
-          [
-            `FAIL (${useProxyOverride ? 'via proxy' : 'direct'})`,
-            `url: ${url}`,
-            `status: ${res.status} ${res.statusText}`,
-            `x-vercel-mitigated: ${vercelMitigated ?? '(none)'}`,
-            `x-vercel-id: ${res.headers.get('x-vercel-id') ?? '(none)'}`,
-            `hint: Vercel WAF is challenging this API route. API fetches will fail until the browser completes the security checkpoint session.`,
-            `action: Open this URL in a new tab, let it verify, then retry the test:\n${verifyUrl}`,
-            `bodyLength: ${bodyLength}`,
-            `bodyPreview:\n${bodyPreview}`,
-          ].join('\n'),
-        )
-        return
-      }
 
       const details = [
         `url: ${url}`,
@@ -121,7 +96,7 @@ export default function SettingsPage() {
 
       setTestResult(
         [
-          `OK (${useProxyOverride ? 'via proxy' : 'direct'})`,
+          `OK (direct)`,
           `url: ${url}`,
           `whoami: ${safeStringify(parsed)}`,
         ].join('\n'),
@@ -130,7 +105,6 @@ export default function SettingsPage() {
       let noCorsProbe: string | null = null
       const isFailedToFetch =
         e instanceof Error && e.name === 'TypeError' && /failed to fetch/i.test(e.message ?? '')
-      let preflightProbe: string | null = null
       if (isFailedToFetch) {
         try {
           // This can help distinguish "network unreachable" vs "CORS blocked".
@@ -139,22 +113,11 @@ export default function SettingsPage() {
         } catch (e2) {
           noCorsProbe = `no-cors probe: failed\n${formatError(e2)}`
         }
-
-        // If proxy is configured, we can ask the serverless function to run an actual OPTIONS preflight against LubeLogger
-        // and report the status/headers (bypasses browser CORS restrictions).
-        try {
-          const preflightUrl = `/ll/preflight?path=/whoami`
-          const r = await fetch(preflightUrl)
-          const t = await r.text()
-          preflightProbe = `server preflight probe (${preflightUrl}):\n${t}`
-        } catch (e3) {
-          preflightProbe = `server preflight probe: failed\n${formatError(e3)}`
-        }
       }
 
       setTestResult(
         [
-          `FAIL (${useProxyOverride ? 'via proxy' : 'direct'})`,
+          `FAIL (direct)`,
           `url: ${url}`,
           `online: ${String(navigator.onLine)}`,
           `origin: ${window.location.origin}`,
@@ -163,7 +126,6 @@ export default function SettingsPage() {
           `x-api-key: ${cfg.lubeLoggerApiKey ? `set (${cfg.lubeLoggerApiKey.length} chars)` : 'missing'}`,
           `preflightRequired: true (non-simple headers: x-api-key, culture-invariant)`,
           noCorsProbe,
-          preflightProbe,
           isFailedToFetch
             ? 'hint: Your server must allow OPTIONS and return Access-Control-Allow-Origin/Headers/Methods on /api/* responses.'
             : null,
@@ -175,29 +137,16 @@ export default function SettingsPage() {
     }
   }
 
-  async function onTestViaProxy() {
-    if (!cfg) return
-    setBusyTest('proxy')
-    setTestResult(null)
-    try {
-      await testWhoami(true)
-    } catch (e) {
-      setTestResult(formatError(e))
-    } finally {
-      setBusyTest(null)
-    }
-  }
-
   async function onTestDirect() {
     if (!cfg) return
-    setBusyTest('direct')
+    setBusyTest(true)
     setTestResult(null)
     try {
-      await testWhoami(false)
+      await testWhoami()
     } catch (e) {
       setTestResult(formatError(e))
     } finally {
-      setBusyTest(null)
+      setBusyTest(false)
     }
   }
 
@@ -260,25 +209,11 @@ export default function SettingsPage() {
           <span>Send LubeLogger “culture-invariant” header</span>
         </label>
 
-        <label className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
-          <input type="checkbox" checked={useProxy} onChange={(e) => setUseProxy(e.target.checked)} />
-          <span>Use same-origin proxy (fixes CORS “Failed to fetch”)</span>
-        </label>
-
-        {useProxy && (
-          <div className="muted">
-            Proxy requires the Vercel env var <code>LUBELOGGER_PROXY_BASE_URL</code> to be set (then redeploy).
-          </div>
-         )}
-
         <div className="actions">
-          <button className="btn" onClick={onTestViaProxy} disabled={!cfg || busyTest !== null}>
-            {busyTest === 'proxy' ? 'Testing…' : 'Test via proxy'}
+          <button className="btn" onClick={onTestDirect} disabled={!cfg || busyTest}>
+            {busyTest ? 'Testing…' : 'Test direct'}
           </button>
-          <button className="btn" onClick={onTestDirect} disabled={!cfg || busyTest !== null}>
-            {busyTest === 'direct' ? 'Testing…' : 'Test direct'}
-          </button>
-          <button className="btn primary" onClick={onSave} disabled={!cfg || busyTest !== null}>
+          <button className="btn primary" onClick={onSave} disabled={!cfg || busyTest}>
             Save
           </button>
         </div>

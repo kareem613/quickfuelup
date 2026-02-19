@@ -5,9 +5,6 @@ function withBaseUrl(baseUrl: string, path: string) {
 }
 
 function apiUrl(cfg: AppConfig, path: string) {
-  // When using proxy, call same-origin Vercel function(s).
-  // We route through /ll/* (rewrite) to avoid Vercel WAF rules that may challenge /api/*.
-  if (cfg.useProxy) return withBaseUrl('', `/ll${path}`)
   return withBaseUrl(cfg.baseUrl, `/api${path}`)
 }
 
