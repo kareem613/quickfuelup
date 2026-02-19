@@ -1,9 +1,0 @@
-{
-  "rewrites": [
-    {
-      "source": "/ll/:path*",
-      "destination": "/api/lubelogger/:path*"
-    }
-  ]
-}
-

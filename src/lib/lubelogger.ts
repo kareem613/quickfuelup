@@ -43,12 +43,11 @@ export async function getVehicles(cfg: AppConfig): Promise<Vehicle[]> {
       const year = typeof obj.year === 'number' ? obj.year : Number(obj.year)
       const make = typeof obj.make === 'string' ? obj.make : undefined
       const model = typeof obj.model === 'string' ? obj.model : undefined
-      const plate = typeof obj.licensePlate === 'string' ? obj.licensePlate : undefined
       const baseLabel = [Number.isFinite(year) ? String(year) : null, make ?? null, model ?? null]
         .filter(Boolean)
         .join(' ')
 
-      const derived = baseLabel ? `${baseLabel}${plate ? ` (${plate})` : ''}` : plate ? `Vehicle ${id} (${plate})` : null
+      const derived = baseLabel || null
 
       const name = String(byName ?? derived ?? `Vehicle ${id}`)
       const imageLocation = typeof obj.imageLocation === 'string' ? obj.imageLocation : undefined

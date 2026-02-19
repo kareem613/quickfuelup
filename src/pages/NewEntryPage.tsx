@@ -25,7 +25,6 @@ export default function NewEntryPage() {
   const [extractBusy, setExtractBusy] = useState(false)
   const [submitBusy, setSubmitBusy] = useState(false)
   const lastExtractSigRef = useRef<string>('')
-  const [vehicleImgMode, setVehicleImgMode] = useState<Record<number, 'direct' | 'proxy' | 'none'>>({})
 
   const pumpUrl = useMemo(() => {
     if (!draft.pumpImage) return null
@@ -178,13 +177,6 @@ export default function NewEntryPage() {
     }
   }
 
-  function vehicleImageUrlDirect(imageLocation?: string) {
-    if (!cfg) return null
-    if (!imageLocation) return null
-    if (/^https?:\/\//i.test(imageLocation)) return imageLocation
-    return `${cfg.baseUrl.replace(/\/+$/, '')}${imageLocation.startsWith('/') ? '' : '/'}${imageLocation}`
-  }
-
   if (!cfg) {
     return (
       <div className="container stack">
@@ -220,8 +212,6 @@ export default function NewEntryPage() {
         ) : (
           <div className="vehicle-grid">
             {vehicles.map((v) => {
-              const direct = vehicleImageUrlDirect(v.imageLocation)
-              const img = vehicleImgMode[v.id] === 'none' ? null : direct
               const selected = draft.vehicleId === v.id
               return (
                 <button
@@ -237,31 +227,6 @@ export default function NewEntryPage() {
                   disabled={submitBusy}
                   type="button"
                 >
-                  <div className="vehicle-thumb">
-                    {img ? (
-                      <img
-                        src={img}
-                        alt={v.name}
-                        loading="lazy"
-                        onError={() => {
-                          setVehicleImgMode((m) => ({ ...m, [v.id]: 'none' }))
-                        }}
-                      />
-                    ) : (
-                      <div className="image-placeholder">
-                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                          <path
-                            d="M6 11.5 7.3 8.6A2 2 0 0 1 9.1 7.4h5.8a2 2 0 0 1 1.8 1.2l1.3 2.9H21a1 1 0 0 1 1 1v4.2A2.3 2.3 0 0 1 19.7 19H19a2 2 0 0 1-4 0H9a2 2 0 0 1-4 0H4.3A2.3 2.3 0 0 1 2 16.7v-4.2a1 1 0 0 1 1-1H6Z"
-                            stroke="currentColor"
-                            strokeWidth="1.6"
-                            strokeLinejoin="round"
-                          />
-                          <circle cx="6.5" cy="19" r="2" stroke="currentColor" strokeWidth="1.6" />
-                          <circle cx="17.5" cy="19" r="2" stroke="currentColor" strokeWidth="1.6" />
-                        </svg>
-                      </div>
-                    )}
-                  </div>
                   <div className="vehicle-name">{v.name}</div>
                 </button>
               )
