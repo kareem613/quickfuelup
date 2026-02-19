@@ -114,7 +114,6 @@ export default function NewEntryPage() {
           <input
             type="file"
             accept="image/*"
-            capture="environment"
             onChange={(e) => onFileChange('pumpImage', e.target.files?.[0] ?? null)}
           />
           <div className="muted">
@@ -127,7 +126,6 @@ export default function NewEntryPage() {
           <input
             type="file"
             accept="image/*"
-            capture="environment"
             onChange={(e) => onFileChange('odometerImage', e.target.files?.[0] ?? null)}
           />
           <div className="muted">
