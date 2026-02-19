@@ -100,6 +100,7 @@ export default function SettingsPage() {
       let noCorsProbe: string | null = null
       const isFailedToFetch =
         e instanceof Error && e.name === 'TypeError' && /failed to fetch/i.test(e.message ?? '')
+      let preflightProbe: string | null = null
       if (isFailedToFetch) {
         try {
           // This can help distinguish "network unreachable" vs "CORS blocked".
@@ -107,6 +108,17 @@ export default function SettingsPage() {
           noCorsProbe = 'no-cors probe: succeeded (network reachable; likely CORS/preflight blocked)'
         } catch (e2) {
           noCorsProbe = `no-cors probe: failed\n${formatError(e2)}`
+        }
+
+        // If proxy is configured, we can ask the serverless function to run an actual OPTIONS preflight against LubeLogger
+        // and report the status/headers (bypasses browser CORS restrictions).
+        try {
+          const preflightUrl = `/api/lubelogger/preflight?path=/whoami`
+          const r = await fetch(preflightUrl)
+          const t = await r.text()
+          preflightProbe = `server preflight probe (${preflightUrl}):\n${t}`
+        } catch (e3) {
+          preflightProbe = `server preflight probe: failed\n${formatError(e3)}`
         }
       }
 
@@ -121,6 +133,7 @@ export default function SettingsPage() {
           `x-api-key: ${cfg.lubeLoggerApiKey ? `set (${cfg.lubeLoggerApiKey.length} chars)` : 'missing'}`,
           `preflightRequired: true (non-simple headers: x-api-key, culture-invariant)`,
           noCorsProbe,
+          preflightProbe,
           isFailedToFetch
             ? 'hint: Your server must allow OPTIONS and return Access-Control-Allow-Origin/Headers/Methods on /api/* responses.'
             : null,
