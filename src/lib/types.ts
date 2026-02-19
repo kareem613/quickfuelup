@@ -15,6 +15,7 @@ export type Draft = {
     odometer: number | null
     fuelQuantity: number | null
     totalCost: number | null
+    explanation?: string | null
     rawJson?: unknown
   }
   form?: {

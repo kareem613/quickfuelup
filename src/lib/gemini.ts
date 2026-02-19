@@ -5,6 +5,7 @@ const ExtractionSchema = z.object({
   odometer: z.number().nullable(),
   fuelQuantity: z.number().nullable(),
   totalCost: z.number().nullable(),
+  explanation: z.string().nullable().optional(),
 })
 
 async function blobToBase64(blob: Blob): Promise<string> {
@@ -39,13 +40,14 @@ Extract these fields and return JSON ONLY matching this TypeScript type:
 {
   "odometer": number | null,       // integer miles/km from odometer
   "fuelQuantity": number | null,   // numeric quantity (gallons/liters) from pump
-  "totalCost": number | null       // numeric total cost from pump
+  "totalCost": number | null,      // numeric total cost from pump
+  "explanation"?: string | null    // if you cannot determine one or more values, explain why
 }
 
 Rules:
 - Return only valid JSON (no markdown, no backticks).
 - Use '.' as decimal separator.
-- If you cannot find a value, set it to null.
+- If you cannot determine a value, set it to null AND include a short explanation.
 `.trim()
 
   const [pumpB64, odoB64] = await Promise.all([

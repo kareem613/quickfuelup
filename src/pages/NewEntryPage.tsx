@@ -210,6 +210,14 @@ export default function NewEntryPage() {
           odometerImage: draft.odometerImage!,
         })
 
+        if (
+          extracted.explanation &&
+          (extracted.odometer === null || extracted.fuelQuantity === null || extracted.totalCost === null)
+        ) {
+          setExtractFailed(true)
+          setExtractLlmMessage(extracted.explanation)
+        }
+
         setDraft((d) => ({
           ...d,
           extracted,
