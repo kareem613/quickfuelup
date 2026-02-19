@@ -146,6 +146,9 @@ export default function NewEntryPage() {
     setError(null)
     setExtractFailed(false)
     setExtractLlmMessage(null)
+    // Force a re-extract when either image changes.
+    lastExtractSigRef.current = ''
+    setForceExtractTick((n) => n + 1)
     try {
       const compressed = await compressImage(file, { maxDimension: 1600, quality: 0.85 })
       setDraft((d) => ({
@@ -239,9 +242,10 @@ export default function NewEntryPage() {
           extracted,
           form: {
             ...(d.form ?? { isfilltofull: true, missedfuelup: false }),
-            odometer: extracted.odometer ?? undefined,
-            fuelconsumed: extracted.fuelQuantity ?? undefined,
-            cost: extracted.totalCost ?? undefined,
+            odometer: typeof d.form?.odometer === 'number' ? d.form.odometer : extracted.odometer ?? undefined,
+            fuelconsumed:
+              typeof d.form?.fuelconsumed === 'number' ? d.form.fuelconsumed : extracted.fuelQuantity ?? undefined,
+            cost: typeof d.form?.cost === 'number' ? d.form.cost : extracted.totalCost ?? undefined,
             isfilltofull: d.form?.isfilltofull ?? true,
             missedfuelup: d.form?.missedfuelup ?? false,
           },
