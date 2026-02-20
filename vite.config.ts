@@ -29,6 +29,11 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        // Ensure new deployments activate immediately (so version/SHA updates show up).
+        skipWaiting: true,
+        clientsClaim: true,
+      },
       manifest: {
         name: 'QuickFuelUp',
         short_name: 'QuickFuelUp',
