@@ -33,6 +33,7 @@ export default defineConfig({
         // Ensure new deployments activate immediately (so version/SHA updates show up).
         skipWaiting: true,
         clientsClaim: true,
+        cleanupOutdatedCaches: true,
       },
       manifest: {
         name: 'QuickFuelUp',
