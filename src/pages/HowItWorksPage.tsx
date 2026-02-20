@@ -33,7 +33,8 @@ export default function HowItWorksPage(props: { onDismiss?: () => void }) {
             <strong>Setup</strong>
             <ol style={{ margin: '8px 0 0 18px' }}>
               <li>
-                In <strong>Settings</strong>, enter your LubeLogger Base URL and API key.
+                In <strong>Settings</strong>, enter your LubeLogger Base URL and an API key with role{' '}
+                <strong>Editor</strong>.
               </li>
               <li>
                 Add at least one <strong>AI</strong> key (Gemini or Anthropic) for photo extraction.
