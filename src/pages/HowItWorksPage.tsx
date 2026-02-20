@@ -24,8 +24,8 @@ export default function HowItWorksPage(props: { onDismiss?: () => void }) {
       <div className="card stack">
         <h3 style={{ margin: 0 }}>Welcome 👋</h3>
         <div className="muted">
-          QuickFillUp is a tiny PWA that helps you log a fuel fill-up to your LubeLogger instance fast — using two photos
-          and AI to pre-fill the numbers.
+          QuickFillUp is a small web app that helps you log a fuel fill-up to your LubeLogger instance fast — using two
+          photos and AI to pre-fill the numbers.
         </div>
 
         <div className="stack" style={{ gap: 10 }}>
@@ -33,12 +33,16 @@ export default function HowItWorksPage(props: { onDismiss?: () => void }) {
             <strong>Setup</strong>
             <ol style={{ margin: '8px 0 0 18px' }}>
               <li>
-                In <strong>Settings</strong>, enter your LubeLogger Base URL and API key. This app uses your API key to
-                load your vehicles and submit fuel-ups.
+                In <strong>Settings</strong>, enter your LubeLogger Base URL and API key.
               </li>
               <li>
-                Add at least one <strong>AI</strong> key (Gemini or Anthropic) if you want photo extraction. (You can
-                always enter values manually.)
+                Add at least one <strong>AI</strong> key (Gemini or Anthropic) for photo extraction.
+              </li>
+              <li>
+                Tap <strong>Test connection</strong> to make sure everything can talk to your LubeLogger instance.
+              </li>
+              <li>
+                Optional: Install the app to get an icon on your home screen.
               </li>
             </ol>
           </div>
