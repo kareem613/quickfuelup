@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { loadConfig, saveConfig } from '../lib/config'
 import type { AppConfig, LlmProvider } from '../lib/types'
+import { getDeferredPrompt, isPwaInstallEnabled, isRunningStandalone, setDeferredPrompt, setPwaInstallEnabled } from '../lib/pwaInstall'
 
 function safeStringify(value: unknown) {
   try {
@@ -40,6 +41,7 @@ export default function SettingsPage() {
   const [testResult, setTestResult] = useState<string | null>(null)
   const [busyTest, setBusyTest] = useState(false)
   const [connectedAs, setConnectedAs] = useState<{ username: string; isAdmin: boolean } | null>(null)
+  const [installPromptReady, setInstallPromptReady] = useState(Boolean(getDeferredPrompt()))
   const activeProviders = useMemo(() => {
     const keyFor = (p: LlmProvider) => (p === 'anthropic' ? anthropicApiKey.trim() : geminiApiKey.trim())
     const ordered = providerOrder.filter((p) => keyFor(p))
@@ -49,6 +51,16 @@ export default function SettingsPage() {
 
   useEffect(() => {
     document.title = 'QuickFuelUp - Settings'
+  }, [])
+
+  useEffect(() => {
+    const onAny = () => setInstallPromptReady(Boolean(getDeferredPrompt()))
+    window.addEventListener('beforeinstallprompt', onAny)
+    window.addEventListener('appinstalled', onAny)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onAny)
+      window.removeEventListener('appinstalled', onAny)
+    }
   }, [])
 
   const hasAnyLlmKey = Boolean(geminiApiKey.trim() || anthropicApiKey.trim())
@@ -121,6 +133,7 @@ export default function SettingsPage() {
           : false
 
       setConnectedAs({ username, isAdmin })
+      setPwaInstallEnabled(true)
       setTestResult(null)
     } catch (e) {
       setConnectedAs(null)
@@ -320,6 +333,25 @@ export default function SettingsPage() {
               admin: {connectedAs.isAdmin ? 'yes' : 'no'}
             </span>
           </div>
+        ) : null}
+
+        {isPwaInstallEnabled() && !isRunningStandalone() && installPromptReady ? (
+          <button
+            className="btn"
+            type="button"
+            onClick={async () => {
+              const p = getDeferredPrompt()
+              if (!p) return
+              await p.prompt()
+              try {
+                await p.userChoice
+              } finally {
+                setDeferredPrompt(null)
+              }
+            }}
+          >
+            Install app
+          </button>
         ) : null}
 
         {testResult && <div className={testResult.startsWith('OK') ? 'card' : 'error'}>{testResult}</div>}
