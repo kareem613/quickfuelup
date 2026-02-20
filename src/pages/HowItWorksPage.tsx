@@ -25,14 +25,27 @@ export default function HowItWorksPage(props: { onDismiss?: () => void }) {
         <h3 style={{ margin: 0 }}>Welcome 👋</h3>
         <div className="muted">
           QuickFillUp is a tiny PWA that helps you log a fuel fill-up to your LubeLogger instance fast — using two photos
-          and an LLM to pre-fill the numbers.
+          and AI to pre-fill the numbers.
         </div>
 
         <div className="stack" style={{ gap: 10 }}>
           <div>
-            <strong>How to use it</strong>
+            <strong>Setup</strong>
             <ol style={{ margin: '8px 0 0 18px' }}>
-              <li>Tap <strong>Settings</strong> and enter your LubeLogger Base URL + API key.</li>
+              <li>
+                In <strong>Settings</strong>, enter your LubeLogger Base URL and API key. This app uses your API key to
+                load your vehicles and submit fuel-ups.
+              </li>
+              <li>
+                Add at least one <strong>AI</strong> key (Gemini or Anthropic) if you want photo extraction. (You can
+                always enter values manually.)
+              </li>
+            </ol>
+          </div>
+
+          <div>
+            <strong>Logging a fill-up</strong>
+            <ol style={{ margin: '8px 0 0 18px' }}>
               <li>Select your vehicle.</li>
               <li>Take a photo of the pump readout and a photo of the odometer.</li>
               <li>Confirm the extracted values (or type them manually), then submit.</li>
@@ -42,6 +55,11 @@ export default function HowItWorksPage(props: { onDismiss?: () => void }) {
           <div className="muted">
             Tip: If submission fails, your photos stay saved until it succeeds — so you can retry without taking them
             again.
+          </div>
+
+          <div className="muted">
+            Privacy: Nothing is sent anywhere except (1) to the AI provider you configured, using your own AI key, when
+            you run extraction, and (2) to your own LubeLogger instance, using your own API key, when you submit.
           </div>
         </div>
 
@@ -65,4 +83,3 @@ export default function HowItWorksPage(props: { onDismiss?: () => void }) {
     </div>
   )
 }
-
