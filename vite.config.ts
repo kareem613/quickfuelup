@@ -36,8 +36,8 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
       },
       manifest: {
-        name: 'QuickFuelUp',
-        short_name: 'QuickFuelUp',
+        name: 'QuickFillUp',
+        short_name: 'QuickFillUp',
         description: 'Capture fuel fill-ups and post to LubeLogger',
         start_url: '/',
         display: 'standalone',

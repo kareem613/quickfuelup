@@ -50,7 +50,7 @@ export default function SettingsPage() {
   }, [anthropicApiKey, geminiApiKey, providerOrder])
 
   useEffect(() => {
-    document.title = 'QuickFuelUp - Settings'
+    document.title = 'QuickFillUp - Settings'
   }, [])
 
   useEffect(() => {
@@ -366,6 +366,10 @@ export default function SettingsPage() {
           device.
         </div>
       )}
+
+      <button className="btn" type="button" onClick={() => navigate('/how-it-works?next=%2Fsettings')}>
+        How it works
+      </button>
     </div>
   )
 }

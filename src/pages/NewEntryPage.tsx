@@ -112,7 +112,7 @@ export default function NewEntryPage() {
   }, [odoUrl, pumpUrl])
 
   useEffect(() => {
-    document.title = 'QuickFuelUp - New Entry'
+    document.title = 'QuickFillUp - New Entry'
   }, [])
 
   useEffect(() => {
@@ -329,7 +329,7 @@ export default function NewEntryPage() {
   if (!cfg) {
     return (
       <div className="container stack">
-        <h2 style={{ margin: 0 }}>QuickFuelUp</h2>
+        <h2 style={{ margin: 0 }}>QuickFillUp</h2>
         <div className="card stack">
           <div>Setup required.</div>
           <Link className="btn primary" to="/settings">
@@ -345,7 +345,7 @@ export default function NewEntryPage() {
       <div className="row">
         <div className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
           <img src="/icons/ios/32.png" alt="" width={24} height={24} style={{ borderRadius: 6 }} />
-          <h2 style={{ margin: 0 }}>Fuel Wizard</h2>
+          <h2 style={{ margin: 0 }}>QuickFillUp</h2>
         </div>
         <Link to="/settings" className="muted">
           Settings
