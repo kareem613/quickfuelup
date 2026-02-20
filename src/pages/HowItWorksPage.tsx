@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { dismissHowItWorks } from '../lib/howItWorks'
 
 export default function HowItWorksPage(props: { onDismiss?: () => void }) {
@@ -68,9 +68,6 @@ export default function HowItWorksPage(props: { onDismiss?: () => void }) {
         </div>
 
         <div className="actions">
-          <Link className="btn" to="/settings">
-            Settings
-          </Link>
           <button
             className="btn primary"
             type="button"
