@@ -210,7 +210,10 @@ export default function SettingsPage() {
   return (
     <div className="container stack">
       <div className="row">
-        <h2 style={{ margin: 0 }}>Settings</h2>
+        <div className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
+          <img src="/icons/ios/32.png" alt="" width={24} height={24} style={{ borderRadius: 6 }} />
+          <h2 style={{ margin: 0 }}>Settings</h2>
+        </div>
         <Link to="/new" className="muted">
           Back
         </Link>
