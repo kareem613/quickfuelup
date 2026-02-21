@@ -541,24 +541,7 @@ export default function NewEntryPage() {
                 <>
                   <img src={odoUrl} alt="Odometer preview" />
                 </>
-              ) : (
-                <div className="image-placeholder">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path
-                      d="M7 7h3l1-2h2l1 2h3a2 2 0 0 1 2 2v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V9a2 2 0 0 1 2-2Z"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M15 12.5 12.8 14M8.5 17.5A6.8 6.8 0 0 1 12 10.2a6.8 6.8 0 0 1 3.5 7.3"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </div>
-              )}
+              ) : null}
               <div className="image-split-overlay" aria-hidden="true">
                 <button
                   className="image-split-btn"
