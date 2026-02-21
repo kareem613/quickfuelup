@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import TopNav from '../components/TopNav'
-import { loadConfig, saveConfig } from '../lib/config'
+import { loadConfig, normalizeConfigFromUnknown, saveConfig } from '../lib/config'
+import { decryptTokenToConfigJson, encryptConfigToToken, isShareCryptoSupported } from '../lib/shareConfig'
 import type { AppConfig, LlmProvider } from '../lib/types'
 import { getDeferredPrompt, isPwaInstallEnabled, isRunningStandalone, setDeferredPrompt, setPwaInstallEnabled } from '../lib/pwaInstall'
 
@@ -39,6 +40,7 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, ms:
 
 export default function SettingsPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const existing = useMemo(() => loadConfig(), [])
   const [baseUrl, setBaseUrl] = useState(existing?.baseUrl ?? '')
   const [lubeLoggerApiKey, setLubeLoggerApiKey] = useState(existing?.lubeLoggerApiKey ?? '')
@@ -67,6 +69,15 @@ export default function SettingsPage() {
   const [busyTest, setBusyTest] = useState(false)
   const [connectedAs, setConnectedAs] = useState<{ username: string; isAdmin: boolean } | null>(null)
   const [installPromptReady, setInstallPromptReady] = useState(Boolean(getDeferredPrompt()))
+  const [sharePasscode, setSharePasscode] = useState('')
+  const [shareLink, setShareLink] = useState<string | null>(null)
+  const [shareError, setShareError] = useState<string | null>(null)
+  const [shareBusy, setShareBusy] = useState(false)
+  const [importToken, setImportToken] = useState<string | null>(null)
+  const [importPasscode, setImportPasscode] = useState('')
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importNotice, setImportNotice] = useState<string | null>(null)
+  const [pendingImport, setPendingImport] = useState<AppConfig | null>(null)
   const activeProviders = useMemo(() => {
     const keyFor = (p: LlmProvider) => (p === 'anthropic' ? anthropicApiKey.trim() : geminiApiKey.trim())
     const ordered = providerOrder.filter((p) => keyFor(p))
@@ -77,6 +88,15 @@ export default function SettingsPage() {
   useEffect(() => {
     document.title = 'QuickFillUp - Settings'
   }, [])
+
+  useEffect(() => {
+    const t = new URLSearchParams(location.search).get('cfg')
+    setImportToken(t)
+    setImportError(null)
+    setImportNotice(null)
+    setPendingImport(null)
+    setImportPasscode('')
+  }, [location.search])
 
   useEffect(() => {
     const onAny = () => setInstallPromptReady(Boolean(getDeferredPrompt()))
@@ -113,8 +133,86 @@ export default function SettingsPage() {
               ? { anthropicModelService: normalizeModelInput(anthropicModelService) }
               : null),
            },
-         }
-       : null
+          }
+        : null
+
+  function applyConfigToForm(next: AppConfig) {
+    setBaseUrl(next.baseUrl ?? '')
+    setLubeLoggerApiKey(next.lubeLoggerApiKey ?? '')
+    setCultureInvariant(next.cultureInvariant ?? true)
+    setShowSoldVehicles(Boolean(next.showSoldVehicles))
+    const orderRaw = next.llm?.providerOrder ?? (['gemini', 'anthropic'] as const)
+    setProviderOrder(Array.from(new Set(orderRaw.filter((p) => p === 'gemini' || p === 'anthropic'))) as LlmProvider[])
+    setGeminiApiKey(next.llm?.geminiApiKey ?? '')
+    setAnthropicApiKey(next.llm?.anthropicApiKey ?? '')
+    setGeminiModelFuel(next.llm?.geminiModelFuel ?? '')
+    setGeminiModelService(next.llm?.geminiModelService ?? '')
+    setAnthropicModelFuel(next.llm?.anthropicModelFuel ?? '')
+    setAnthropicModelService(next.llm?.anthropicModelService ?? '')
+  }
+
+  function clearImportTokenFromUrl() {
+    const params = new URLSearchParams(location.search)
+    params.delete('cfg')
+    const nextSearch = params.toString()
+    navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : '' }, { replace: true })
+  }
+
+  async function onDecryptImport() {
+    if (!importToken) return
+    if (!importPasscode.trim()) {
+      setImportError('Enter the passcode.')
+      return
+    }
+    setImportError(null)
+    setImportNotice(null)
+    setPendingImport(null)
+    try {
+      const decrypted = await decryptTokenToConfigJson(importToken, importPasscode.trim())
+      const normalized = normalizeConfigFromUnknown(decrypted)
+      if (!normalized) throw new Error('Decrypted settings were not recognized by this app version.')
+
+      if (loadConfig()) {
+        setPendingImport(normalized)
+        setImportNotice('Decrypted settings ready to import.')
+        return
+      }
+
+      saveConfig(normalized)
+      applyConfigToForm(normalized)
+      setImportNotice('Imported settings applied.')
+      clearImportTokenFromUrl()
+    } catch (e) {
+      setImportError(e instanceof Error ? e.message : 'Failed to decrypt.')
+    }
+  }
+
+  async function onGenerateShareLink() {
+    if (!cfg) {
+      setShareError('Fill in Base URL and API key first.')
+      return
+    }
+    if (!isShareCryptoSupported()) {
+      setShareError('Sharing requires a modern browser with WebCrypto support.')
+      return
+    }
+    if (!sharePasscode.trim()) {
+      setShareError('Enter a passcode.')
+      return
+    }
+    setShareBusy(true)
+    setShareError(null)
+    try {
+      const token = await encryptConfigToToken(cfg, sharePasscode.trim())
+      const url = new URL('/settings', window.location.origin)
+      url.searchParams.set('cfg', token)
+      setShareLink(url.toString())
+    } catch (e) {
+      setShareError(e instanceof Error ? e.message : 'Failed to generate share link.')
+    } finally {
+      setShareBusy(false)
+    }
+  }
 
   function resolveWhoamiUrl() {
     if (!cfg) return null
@@ -412,6 +510,80 @@ export default function SettingsPage() {
     <div className="container stack">
       <TopNav />
       <h2 style={{ margin: 0 }}>Settings</h2>
+
+      {importToken ? (
+        <div className="card stack">
+          <strong>Import shared settings</strong>
+          {!isShareCryptoSupported() ? (
+            <div className="muted">Import requires a modern browser with WebCrypto support.</div>
+          ) : (
+            <>
+              <div className="muted">This link contains encrypted AppConfig settings only (no drafts or other flags).</div>
+              <div className="field">
+                <label>Passcode</label>
+                <input
+                  type="password"
+                  value={importPasscode}
+                  onChange={(e) => setImportPasscode(e.target.value)}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+              </div>
+              <div className="actions">
+                <button className="btn primary" type="button" onClick={onDecryptImport} disabled={!importPasscode.trim()}>
+                  Decrypt
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    setPendingImport(null)
+                    setImportNotice('Import cancelled.')
+                    clearImportTokenFromUrl()
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+
+              {pendingImport ? (
+                <div className="card stack" style={{ padding: 10 }}>
+                  <div className="muted">Existing settings were found on this device. Overwrite all existing settings?</div>
+                  <div className="actions">
+                    <button
+                      className="btn primary"
+                      type="button"
+                      onClick={() => {
+                        saveConfig(pendingImport)
+                        applyConfigToForm(pendingImport)
+                        setPendingImport(null)
+                        setImportNotice('Imported settings applied.')
+                        clearImportTokenFromUrl()
+                      }}
+                    >
+                      Overwrite all
+                    </button>
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() => {
+                        setPendingImport(null)
+                        setImportNotice('Import cancelled.')
+                        clearImportTokenFromUrl()
+                      }}
+                    >
+                      Keep mine
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          )}
+          {importError ? <div className="error">{importError}</div> : null}
+          {importNotice ? <div className="muted">{importNotice}</div> : null}
+        </div>
+      ) : null}
 
       <div className="card stack">
         <div className="field">
@@ -725,6 +897,76 @@ export default function SettingsPage() {
           device.
         </div>
       )}
+
+      <div className="card stack">
+        <strong>Share settings</strong>
+        {!isShareCryptoSupported() ? (
+          <div className="muted">Sharing requires a modern browser with WebCrypto support.</div>
+        ) : (
+          <>
+            <div className="muted">Use a long passcode; anyone with the link can attempt offline guessing.</div>
+            <div className="field">
+              <label>Passcode</label>
+              <input
+                type="password"
+                value={sharePasscode}
+                onChange={(e) => {
+                  setSharePasscode(e.target.value)
+                  setShareLink(null)
+                  setShareError(null)
+                }}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+            </div>
+            <div className="actions">
+              <button className="btn primary" type="button" onClick={onGenerateShareLink} disabled={!cfg || shareBusy}>
+                {shareBusy ? 'Generating…' : 'Generate link'}
+              </button>
+              {shareLink ? (
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(shareLink)
+                      setShareError(null)
+                    } catch {
+                      setShareError('Could not copy to clipboard.')
+                    }
+                  }}
+                >
+                  Copy link
+                </button>
+              ) : null}
+              {shareLink && typeof navigator.share === 'function' ? (
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.share({ url: shareLink, title: 'QuickFillUp settings' })
+                      setShareError(null)
+                    } catch {
+                      // user canceled or share failed
+                    }
+                  }}
+                >
+                  Share…
+                </button>
+              ) : null}
+            </div>
+            {shareLink ? (
+              <div className="field">
+                <label>Link</label>
+                <input value={shareLink} readOnly />
+              </div>
+            ) : null}
+          </>
+        )}
+        {shareError ? <div className="error">{shareError}</div> : null}
+      </div>
 
       <button className="btn" type="button" onClick={() => navigate('/how-it-works?next=%2Fsettings')}>
         How it works
