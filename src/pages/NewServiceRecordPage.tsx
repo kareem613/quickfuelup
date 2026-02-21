@@ -14,6 +14,13 @@ function numberOrEmpty(n: number | undefined) {
   return typeof n === 'number' && Number.isFinite(n) ? String(n) : ''
 }
 
+function splitVehicleName(name: string): { year?: string; model: string } {
+  const trimmed = name.trim()
+  const m = trimmed.match(/^(\d{4})\s+(.+)$/)
+  if (m) return { year: m[1], model: m[2] ?? trimmed }
+  return { model: trimmed }
+}
+
 function withTimeout<T>(p: Promise<T>, ms: number, label: string) {
   return new Promise<T>((resolve, reject) => {
     const t = window.setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms)
@@ -679,7 +686,15 @@ export default function NewServiceRecordPage() {
                   disabled={submitBusy}
                   type="button"
                 >
-                  <div className="vehicle-name">{v.name}</div>
+                  {(() => {
+                    const parts = splitVehicleName(v.name)
+                    return (
+                      <div className="vehicle-name">
+                        {parts.year ? <div className="vehicle-year">{parts.year}</div> : null}
+                        <div className="vehicle-model">{parts.model}</div>
+                      </div>
+                    )
+                  })()}
                 </button>
               )
             })}

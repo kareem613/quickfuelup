@@ -207,11 +207,16 @@ textarea {
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(0, 0, 0, 0.18);
-  padding: 8px;
+  padding: 10px 8px;
   cursor: pointer;
   color: inherit;
-  text-align: left;
+  text-align: center;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 54px;
 }
 
 .vehicle-card.selected {
@@ -237,9 +242,23 @@ textarea {
 }
 
 .vehicle-name {
-  margin-top: 8px;
+  width: 100%;
   font-size: 0.95rem;
-  line-height: 1.2;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vehicle-year {
+  font-size: 0.78rem;
+  opacity: 0.85;
+  line-height: 1.05;
+  margin-bottom: 2px;
+}
+
+.vehicle-model {
+  font-size: 0.95rem;
+  line-height: 1.1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

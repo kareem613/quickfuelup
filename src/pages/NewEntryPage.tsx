@@ -13,6 +13,13 @@ function numberOrEmpty(n: number | undefined) {
   return typeof n === 'number' && Number.isFinite(n) ? String(n) : ''
 }
 
+function splitVehicleName(name: string): { year?: string; model: string } {
+  const trimmed = name.trim()
+  const m = trimmed.match(/^(\d{4})\s+(.+)$/)
+  if (m) return { year: m[1], model: m[2] ?? trimmed }
+  return { model: trimmed }
+}
+
 function llmMessageFromGeminiError(e: unknown): string | null {
   const msg = e instanceof Error ? e.message : String(e)
   const prefixes = [
@@ -502,10 +509,18 @@ export default function NewEntryPage() {
                       }))
                     }}
                     disabled={submitBusy}
-                    type="button"
-                  >
-                    <div className="vehicle-name">{v.name}</div>
-                  </button>
+                  type="button"
+                >
+                  {(() => {
+                    const parts = splitVehicleName(v.name)
+                    return (
+                      <div className="vehicle-name">
+                        {parts.year ? <div className="vehicle-year">{parts.year}</div> : null}
+                        <div className="vehicle-model">{parts.model}</div>
+                      </div>
+                    )
+                  })()}
+                </button>
               )
             })}
           </div>
