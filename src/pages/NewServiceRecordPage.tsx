@@ -481,7 +481,6 @@ export default function NewServiceRecordPage() {
     const rec = (draft.records ?? []).find((r) => r.id === id)
     if (!rec) return
     if (!recordCanSubmit(rec)) {
-      setError('Please confirm vehicle, record type, date, odometer, description, cost, and required extra fields.')
       const missingVehicle = typeof rec.form.vehicleId !== 'number'
       if (missingVehicle) setCard3Open(true)
       setDraft((d) => ({
@@ -1060,6 +1059,7 @@ export default function NewServiceRecordPage() {
                 </datalist>
               </div>
 
+              {attempted && !recordCanSubmit(r) ? <div className="error">Some fields are missing or invalid.</div> : null}
               <div className="actions">
                 <button
                   className="btn primary"

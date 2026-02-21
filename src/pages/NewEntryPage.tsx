@@ -136,6 +136,7 @@ export default function NewEntryPage() {
   const [extractBusy, setExtractBusy] = useState(false)
   const [submitBusy, setSubmitBusy] = useState(false)
   const [submitAttempted, setSubmitAttempted] = useState(false)
+  const [submitValidationMessage, setSubmitValidationMessage] = useState<string | null>(null)
   const [extractFailed, setExtractFailed] = useState(false)
   const [extractLlmMessage, setExtractLlmMessage] = useState<string | null>(null)
   const [forceExtractTick, setForceExtractTick] = useState(0)
@@ -373,10 +374,11 @@ export default function NewEntryPage() {
     if (!cfg) return
     setSubmitAttempted(true)
     if (!canSubmit) {
-      setError('Please confirm odometer, fuel quantity, and total cost.')
+      setSubmitValidationMessage('Some fields are missing or invalid.')
       return
     }
     setSubmitBusy(true)
+    setSubmitValidationMessage(null)
     setError(null)
     try {
       const res = await addGasRecord(cfg, {
@@ -394,6 +396,7 @@ export default function NewEntryPage() {
       setDraft({ date: todayISODate(), form: { isfilltofull: true, missedfuelup: false } })
       lastExtractSigRef.current = ''
       setSubmitAttempted(false)
+      setSubmitValidationMessage(null)
       setSuccessOpen(true)
       // Keep response in console for now; UX can add a toast later.
       console.log('Submitted', res)
@@ -710,6 +713,7 @@ export default function NewEntryPage() {
                 ...d,
                 form: { ...form, odometer: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
               }))
+              if (submitAttempted) setSubmitValidationMessage(null)
             }}
             disabled={!canEditDetails || submitBusy}
           />
@@ -733,6 +737,7 @@ export default function NewEntryPage() {
                   ...d,
                   form: { ...form, fuelconsumed: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
                 }))
+                if (submitAttempted) setSubmitValidationMessage(null)
               }}
               disabled={!canEditDetails || submitBusy}
             />
@@ -752,6 +757,7 @@ export default function NewEntryPage() {
                   ...d,
                   form: { ...form, cost: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
                 }))
+                if (submitAttempted) setSubmitValidationMessage(null)
               }}
               disabled={!canEditDetails || submitBusy}
             />
@@ -807,6 +813,7 @@ export default function NewEntryPage() {
           />
         </div>
 
+        {submitAttempted && !canSubmit && submitValidationMessage ? <div className="error">{submitValidationMessage}</div> : null}
         <div className="actions">
           <button className="btn primary" disabled={submitBusy || extractBusy} onClick={onSubmit} type="button">
             {submitBusy ? 'Submitting…' : 'Submit to LubeLogger'}
@@ -820,6 +827,7 @@ export default function NewEntryPage() {
               setExtractFailed(false)
               setExtractLlmMessage(null)
               setSubmitAttempted(false)
+              setSubmitValidationMessage(null)
               setDraft({ date: todayISODate(), form: { isfilltofull: true, missedfuelup: false } })
             }}
             type="button"
