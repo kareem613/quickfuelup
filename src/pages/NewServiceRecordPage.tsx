@@ -379,46 +379,52 @@ export default function NewServiceRecordPage() {
           .map((r) => r.vehicleId)
           .find((id) => typeof id === 'number' && vehicles.some((v) => v.id === id))
 
-        const baseVehicleId =
-          (anySuggestedVehicle && typeof draft.vehicleId === 'number' && draft.vehicleId !== anySuggestedVehicle
-            ? anySuggestedVehicle
-            : (!vehicleTouched.current && anySuggestedVehicle ? anySuggestedVehicle : draft.vehicleId)) ?? null
+        setDraft((d) => {
+          const currentVehicleId = d.vehicleId
+          const baseVehicleId =
+            (anySuggestedVehicle && typeof currentVehicleId === 'number' && currentVehicleId !== anySuggestedVehicle
+              ? anySuggestedVehicle
+              : (!vehicleTouched.current && anySuggestedVehicle ? anySuggestedVehicle : currentVehicleId)) ?? null
 
-        // If the LLM suggests the same vehicle the user already selected, treat vehicleId warnings as resolved/noise.
-        const cleanedExtracted =
-          anySuggestedVehicle && typeof draft.vehicleId === 'number' && draft.vehicleId === anySuggestedVehicle
-            ? { ...extracted, warnings: (extracted.warnings ?? []).filter((w) => !/^\/records\/\d+\/vehicleId$/.test(w.path)) }
-            : extracted
+          // If the LLM suggests the same vehicle the user already selected, treat vehicleId warnings as resolved/noise.
+          const cleanedExtracted =
+            anySuggestedVehicle && typeof currentVehicleId === 'number' && currentVehicleId === anySuggestedVehicle
+              ? {
+                  ...extracted,
+                  warnings: (extracted.warnings ?? []).filter((w) => !/^\/records\/\d+\/vehicleId$/.test(w.path)),
+                }
+              : extracted
 
-        const records: ServiceDraftRecord[] = cleanedExtracted.records.map((r, idx) => {
-          const vehicleId =
-            typeof r.vehicleId === 'number' && vehicles.some((v) => v.id === r.vehicleId) ? r.vehicleId : baseVehicleId
-          const iso = normalizeToISODate(r.date)
+          const records: ServiceDraftRecord[] = cleanedExtracted.records.map((r, idx) => {
+            const vehicleId =
+              typeof r.vehicleId === 'number' && vehicles.some((v) => v.id === r.vehicleId) ? r.vehicleId : baseVehicleId
+            const iso = normalizeToISODate(r.date)
+            return {
+              id: `rec-${idx + 1}`,
+              status: 'pending',
+              extracted: r,
+              form: {
+                vehicleId: vehicleId ?? undefined,
+                recordType: r.recordType ?? undefined,
+                date: iso ?? undefined,
+                odometer: r.odometer ?? undefined,
+                description: r.description ?? undefined,
+                cost: r.totalCost ?? undefined,
+                notes: r.notes ?? undefined,
+                tags: r.tags ?? undefined,
+                extraFields: (r.extraFields ?? undefined) ?? [],
+              },
+            }
+          })
+
           return {
-            id: `rec-${idx + 1}`,
-            status: 'pending',
-            extracted: r,
-            form: {
-              vehicleId: vehicleId ?? undefined,
-              recordType: r.recordType ?? undefined,
-              date: iso ?? undefined,
-              odometer: r.odometer ?? undefined,
-              description: r.description ?? undefined,
-              cost: r.totalCost ?? undefined,
-              notes: r.notes ?? undefined,
-              tags: r.tags ?? undefined,
-              extraFields: (r.extraFields ?? undefined) ?? [],
-            },
+            ...d,
+            // If the LLM suggests a different vehicle, prefer it over the current selection.
+            vehicleId: baseVehicleId ?? d.vehicleId,
+            extracted: cleanedExtracted,
+            records,
           }
         })
-
-        setDraft((d) => ({
-          ...d,
-          // If the LLM suggests a different vehicle, prefer it over the current selection.
-          vehicleId: baseVehicleId ?? d.vehicleId,
-          extracted: cleanedExtracted,
-          records,
-        }))
       } catch (e) {
         setExtractFailed(true)
         setExtractMessage(e instanceof Error ? e.message : String(e))
