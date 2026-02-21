@@ -229,8 +229,8 @@ export default function NewServiceRecordPage() {
     }
   }
 
-  const step1Done = Boolean(draft.vehicleId)
-  const step2Done = Boolean(draft.document && (draft.documentImages?.length || draft.documentText))
+  const step1Done = Boolean(draft.document && (draft.documentImages?.length || draft.documentText))
+  const step2Done = Boolean(draft.vehicleId)
 
   useEffect(() => {
     if (!step1Done) {
@@ -242,12 +242,9 @@ export default function NewServiceRecordPage() {
   }, [step1Done])
 
   useEffect(() => {
-    if (!step2Done) {
-      setCard2Open(true)
-      card2Touched.current = false
-      return
-    }
-    if (!card2Touched.current) setCard2Open(false)
+    // Step 2 is optional; keep it open by default, but allow the user to collapse it even if incomplete.
+    if (step2Done && !card2Touched.current) setCard2Open(false)
+    if (!step2Done && !card2Touched.current) setCard2Open(true)
   }, [step2Done])
 
   const canExtractAny = Boolean(cfg && draft.document && providersWithKeys.length && (draft.documentImages?.length || draft.documentText))
@@ -263,14 +260,14 @@ export default function NewServiceRecordPage() {
   useEffect(() => {
     if (!cfg) return
     if (!draft.document) return
-    if (!draft.vehicleId) return
+    if (vehicles.length === 0) return
     if (providersWithKeys.length === 0) return
     const forced = forceExtractTick !== lastForceExtractTickRef.current
     if (docBusy || extractBusy || submitBusy) return
     if (!forced && draft.records?.length) return
     if (draft.extracted) return
 
-    const sig = `${draft.vehicleId}:${draft.document.size}:${draft.document.name}:${draft.documentImages?.[0]?.size ?? 0}:${draft.documentText?.length ?? 0}:${draft.date}`
+    const sig = `${draft.document.size}:${draft.document.name}:${draft.documentImages?.[0]?.size ?? 0}:${draft.documentText?.length ?? 0}:${draft.date}:${vehicles.length}`
     if (sig === lastExtractSigRef.current) return
     lastExtractSigRef.current = sig
 
@@ -552,10 +549,46 @@ export default function NewServiceRecordPage() {
             setCard1Open((v) => !v)
           }}
         >
-          <strong>1) Select vehicle</strong>
+          <strong>1) Invoice / receipt (PDF or image)</strong>
           {step1Done ? <DoneIcon /> : <span className="muted">Required</span>}
         </button>
-        {step1Done && !card1Open ? null : busy ? (
+        {step1Done && !card1Open ? null : (
+          <>
+            <div className={`image-preview clickable${submitBusy ? ' disabled' : ''}`} onClick={() => docInputRef.current?.click()}>
+              {previewUrl ? <img src={previewUrl} alt="Document preview" /> : <div className="muted">Tap to choose a PDF or image</div>}
+            </div>
+            <input
+              ref={docInputRef}
+              className="sr-only"
+              type="file"
+              accept="application/pdf,image/*"
+              onChange={(e) => onDocumentChange(e.target.files?.[0] ?? null)}
+              disabled={submitBusy}
+            />
+            <div className="muted">
+              {draft.document ? `Selected: ${draft.document.name}` : ''}
+              {draft.document && draft.documentText ? ` (text extracted)` : draft.document ? '' : ''}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className={`card stack${step2Done && !card2Open ? ' collapsed' : ''}`} style={{ opacity: step1Done ? 1 : 0.6 }}>
+        <button
+          className="row card-header-btn"
+          type="button"
+          onClick={() => {
+            card2Touched.current = true
+            setCard2Open((v) => !v)
+          }}
+        >
+          <strong>2) Vehicle</strong>
+          {step2Done ? <DoneIcon /> : <span className="muted">Optional</span>}
+        </button>
+
+        {step2Done && !card2Open ? null : !step1Done ? (
+          <div className="muted">Upload an invoice first to enable auto-selection.</div>
+        ) : busy ? (
           <div className="muted">Loading vehicles…</div>
         ) : (
           <div className="vehicle-grid">
@@ -569,9 +602,16 @@ export default function NewServiceRecordPage() {
                     vehicleTouched.current = true
                     setExtractFailed(false)
                     setExtractMessage(null)
-                    setDraft((d) => ({ ...d, vehicleId: v.id, extracted: undefined }))
+                    setDraft((d) => ({
+                      ...d,
+                      vehicleId: v.id,
+                      extracted: undefined,
+                      records: (d.records ?? []).map((r) =>
+                        r.vehicleTouched || typeof r.form.vehicleId === 'number' ? r : { ...r, form: { ...r.form, vehicleId: v.id } },
+                      ),
+                    }))
                   }}
-                  disabled={submitBusy}
+                  disabled={!step1Done || submitBusy}
                   type="button"
                 >
                   <div className="vehicle-name">{v.name}</div>
@@ -582,42 +622,7 @@ export default function NewServiceRecordPage() {
         )}
       </div>
 
-      <div className={`card stack${step2Done && !card2Open ? ' collapsed' : ''}`} style={{ opacity: step1Done ? 1 : 0.6 }}>
-        <button
-          className="row card-header-btn"
-          type="button"
-          onClick={() => {
-            if (!step2Done) return
-            card2Touched.current = true
-            setCard2Open((v) => !v)
-          }}
-        >
-          <strong>2) Invoice / receipt (PDF or image)</strong>
-          {step2Done ? <DoneIcon /> : <span className="muted">Required</span>}
-        </button>
-
-        {step2Done && !card2Open ? null : (
-          <>
-            <div className={`image-preview clickable${!step1Done || submitBusy ? ' disabled' : ''}`} onClick={() => docInputRef.current?.click()}>
-              {previewUrl ? <img src={previewUrl} alt="Document preview" /> : <div className="muted">Tap to choose a PDF or image</div>}
-            </div>
-            <input
-              ref={docInputRef}
-              className="sr-only"
-              type="file"
-              accept="application/pdf,image/*"
-              onChange={(e) => onDocumentChange(e.target.files?.[0] ?? null)}
-              disabled={!step1Done || submitBusy}
-            />
-            <div className="muted">
-              {draft.document ? `Selected: ${draft.document.name}` : ''}
-              {draft.document && draft.documentText ? ` (text extracted)` : draft.document ? '' : ''}
-            </div>
-          </>
-        )}
-      </div>
-
-      <div className={`card stack${extractBusy ? ' extracting' : ''}`} style={{ opacity: step1Done && step2Done ? 1 : 0.6 }}>
+      <div className={`card stack${extractBusy ? ' extracting' : ''}`} style={{ opacity: step1Done ? 1 : 0.6 }}>
         <div className="row">
           <strong>3) Review</strong>
           <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
