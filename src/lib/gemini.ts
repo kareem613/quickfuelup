@@ -119,7 +119,7 @@ Return JSON ONLY matching this TypeScript type:
     "vehicleId": number | null,
     "date": string | null,          // yyyy-mm-dd (preferred). If unknown, null.
     "odometer": number | null,      // integer miles/km
-    "description": string | null,   // concise summary of what was done
+    "description": string | null,   // VERY concise summary (e.g. "AC repair", "Oil change")
     "totalCost": number | null,     // best estimate for that record's cost
     "notes"?: string | null,
     "tags"?: string | null,
@@ -138,13 +138,15 @@ ${extraFieldsText}
 Document text (may be empty for scanned PDFs):
 ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(none)'}
 
-Rules:
-- Return only valid JSON (no markdown, no backticks).
-- Use '.' as decimal separator.
-- If you choose a recordType, choose the one that best matches the work (service=scheduled maintenance, repair=unplanned fix, upgrade=enhancement).
-- Create between 1 and 8 records; prefer fewer records unless there are clearly distinct visits/dates/vehicles.
-- Do not produce a record for every part; instead summarize parts/labor into a single description per visit/event.
-- If you cannot determine a value, set it to null and briefly explain why in explanation.
+ Rules:
+ - Return only valid JSON (no markdown, no backticks).
+ - Use '.' as decimal separator.
+ - If you choose a recordType, choose the one that best matches the work (service=scheduled maintenance, repair=unplanned fix, upgrade=enhancement).
+ - Create between 1 and 8 records; prefer fewer records unless there are clearly distinct visits/dates/vehicles.
+ - Do not produce a record for every part.
+ - Keep "description" VERY concise (2-6 words). Put the detailed work performed (parts/labor/steps) in "notes".
+   Example: description="AC repair", notes="Evacuated/recharged system; replaced condenser; replaced O-rings; leak test; added dye."
+ - If you cannot determine a value, set it to null and briefly explain why in explanation.
 `.trim()
 
   const imageBlobs = (params.images ?? []).slice(0, 3)
