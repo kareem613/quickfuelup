@@ -144,7 +144,7 @@ export async function extractServiceFromDocumentAnthropic(params: {
    "hasWarnings": boolean
  }
 
-Available vehicles (pick one vehicleId if confident; otherwise null):
+Available vehicles (pick one vehicleId if confident OR if you can make a reasonable educated guess; otherwise null):
 ${vehiclesText}
 
 Configured LubeLogger extra fields by record type (prefer these names if they match):
@@ -157,6 +157,7 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
   - Return only valid JSON (no markdown, no backticks).
   - Use '.' as decimal separator.
   - Set "hasWarnings" to true if there is missing required info (any nulls for important fields like vehicleId/date/odometer/description/totalCost), and/or you made an educated guess / are not fully confident about any value. Otherwise set it to false.
+  - Still make your best educated guess when the document strongly suggests a value (e.g. vehicleId from invoice header). If you guessed, include a short explanation and set "hasWarnings" to true. Only use null when you truly cannot determine a value.
   - If you choose a recordType, choose the one that best matches the work (service=scheduled maintenance, repair=unplanned fix, upgrade=enhancement).
   - Create between 1 and 8 records; prefer fewer records unless there are clearly distinct visits/dates/vehicles.
   - Do not produce a record for every part.
