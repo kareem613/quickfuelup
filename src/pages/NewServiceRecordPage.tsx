@@ -386,9 +386,12 @@ export default function NewServiceRecordPage() {
               ? anySuggestedVehicle
               : (!vehicleTouched.current && anySuggestedVehicle ? anySuggestedVehicle : currentVehicleId)) ?? null
 
-          // If the LLM suggests the same vehicle the user already selected, treat vehicleId warnings as resolved/noise.
+          // If the LLM suggests the same vehicle the user already selected (explicitly), treat vehicleId warnings as resolved/noise.
           const cleanedExtracted =
-            anySuggestedVehicle && typeof currentVehicleId === 'number' && currentVehicleId === anySuggestedVehicle
+            vehicleTouched.current &&
+            anySuggestedVehicle &&
+            typeof currentVehicleId === 'number' &&
+            currentVehicleId === anySuggestedVehicle
               ? {
                   ...extracted,
                   warnings: (extracted.warnings ?? []).filter((w) => !/^\/records\/\d+\/vehicleId$/.test(w.path)),
