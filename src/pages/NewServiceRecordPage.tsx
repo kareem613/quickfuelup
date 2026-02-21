@@ -646,7 +646,6 @@ export default function NewServiceRecordPage() {
           type="button"
           onClick={() => {
             if (!step1Done) return
-            if (!step2Done) return
             card3Touched.current = true
             setCard3Open((v) => !v)
           }}
@@ -655,8 +654,8 @@ export default function NewServiceRecordPage() {
           {step3Done ? <DoneIcon /> : <span className="muted">Required</span>}
         </button>
 
-        {step3Done && !card3Open ? null : !step2Done ? (
-          <div className="muted">Extract first to auto-select a vehicle (if possible).</div>
+        {step3Done && !card3Open ? null : !step1Done ? (
+          <div className="muted">Upload an invoice first.</div>
         ) : busy ? (
           <div className="muted">Loading vehicles…</div>
         ) : (
@@ -677,7 +676,7 @@ export default function NewServiceRecordPage() {
                       ),
                     }))
                   }}
-                  disabled={!step2Done || submitBusy}
+                  disabled={submitBusy}
                   type="button"
                 >
                   <div className="vehicle-name">{v.name}</div>
