@@ -92,11 +92,15 @@ export async function extractServiceFromDocument(params: {
 }) {
   const genAI = new GoogleGenerativeAI(params.apiKey)
   const modelNames = [
-    'gemini-2.0-flash',
-    'gemini-1.5-flash-latest',
+    // Prefer a stronger model for service invoice reasoning.
+    // Docs: https://ai.google.dev/gemini-api/docs/models/gemini
+    'gemini-2.5-pro',
+    'gemini-2.5-flash',
+    // Older fallbacks for accounts without 2.5 access.
     'gemini-1.5-pro-latest',
-    'gemini-1.5-flash',
+    'gemini-1.5-flash-latest',
     'gemini-1.5-pro',
+    'gemini-1.5-flash',
   ] as const
 
   const vehiclesText = params.vehicles.map((v) => `- ${v.id}: ${v.name}`).join('\n')

@@ -123,6 +123,12 @@ export default function NewServiceRecordPage() {
       .filter((p) => p.apiKey.trim())
   }, [cfg])
 
+  // Service extraction: prefer Gemini only when configured (better consistency + user preference).
+  const serviceProviders = useMemo(() => {
+    const gemini = providersWithKeys.find((p) => p.provider === 'gemini')
+    return gemini ? [gemini] : providersWithKeys
+  }, [providersWithKeys])
+
   const extraFieldNamesByRecordType = useMemo(() => {
     const out: Record<string, string[]> = {}
     for (const r of extraFieldDefs) {
@@ -260,7 +266,7 @@ export default function NewServiceRecordPage() {
     if (!cfg) return
     if (!draft.document) return
     if (!draft.vehicleId) return
-    if (providersWithKeys.length === 0) return
+    if (serviceProviders.length === 0) return
     const forced = forceExtractTick !== lastForceExtractTickRef.current
     if (docBusy || extractBusy || submitBusy) return
     if (!forced && draft.records?.length) return
@@ -279,7 +285,7 @@ export default function NewServiceRecordPage() {
 
       try {
         const extracted = await extractServiceFromDocumentWithFallback({
-          providers: providersWithKeys,
+          providers: serviceProviders,
           images: draft.documentImages?.slice(0, 3),
           documentText: draft.documentText,
           vehicles,
@@ -341,7 +347,7 @@ export default function NewServiceRecordPage() {
     extractBusy,
     extraFieldNamesByRecordType,
     forceExtractTick,
-    providersWithKeys,
+    serviceProviders,
     submitBusy,
     vehicles,
   ])
