@@ -91,6 +91,34 @@ function RefreshIcon() {
   )
 }
 
+function CameraIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M7 7h3l1-2h2l1 2h3a2 2 0 0 1 2 2v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V9a2 2 0 0 1 2-2Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  )
+}
+
+function FileIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M8 3h6l4 4v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path d="M14 3v5h5" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export default function NewServiceRecordPage() {
   const navigate = useNavigate()
   const cfg = useMemo(() => loadConfig(), [])
@@ -114,7 +142,8 @@ export default function NewServiceRecordPage() {
 
   const vehicleTouched = useRef(false)
 
-  const docInputRef = useRef<HTMLInputElement | null>(null)
+  const docCameraInputRef = useRef<HTMLInputElement | null>(null)
+  const docFileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [card1Open, setCard1Open] = useState(true)
   const [card2Open, setCard2Open] = useState(true)
@@ -568,16 +597,46 @@ export default function NewServiceRecordPage() {
         </button>
         {step1Done && !card1Open ? null : (
           <>
-            <div className={`image-preview clickable${submitBusy ? ' disabled' : ''}`} onClick={() => docInputRef.current?.click()}>
-              {previewUrl ? <img src={previewUrl} alt="Document preview" /> : <div className="muted">Tap to choose a PDF or image</div>}
+            <div className={`image-preview clickable split${docBusy || submitBusy ? ' disabled' : ''}`}>
+              {previewUrl ? <img src={previewUrl} alt="Document preview" /> : null}
+              <div className="image-split-overlay" aria-hidden="true">
+                <button
+                  className="image-split-btn"
+                  type="button"
+                  onClick={() => docCameraInputRef.current?.click()}
+                  disabled={docBusy || submitBusy}
+                >
+                  <CameraIcon />
+                  <div>Camera</div>
+                </button>
+                <button
+                  className="image-split-btn"
+                  type="button"
+                  onClick={() => docFileInputRef.current?.click()}
+                  disabled={docBusy || submitBusy}
+                >
+                  <FileIcon />
+                  <div>Files</div>
+                </button>
+              </div>
+              {!previewUrl ? <div className="image-placeholder">Select invoice</div> : null}
             </div>
             <input
-              ref={docInputRef}
+              ref={docCameraInputRef}
+              className="sr-only"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={(e) => onDocumentChange(e.target.files?.[0] ?? null)}
+              disabled={docBusy || submitBusy}
+            />
+            <input
+              ref={docFileInputRef}
               className="sr-only"
               type="file"
               accept="application/pdf,image/*"
               onChange={(e) => onDocumentChange(e.target.files?.[0] ?? null)}
-              disabled={submitBusy}
+              disabled={docBusy || submitBusy}
             />
             <div className="muted">
               {draft.document ? `Selected: ${draft.document.name}` : ''}
