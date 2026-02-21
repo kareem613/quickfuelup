@@ -143,6 +143,11 @@ export default function NewServiceRecordPage() {
     return URL.createObjectURL(img)
   }, [draft.documentImages])
 
+  const selectedVehicleName = useMemo(() => {
+    const v = vehicles.find((x) => x.id === draft.vehicleId)
+    return v?.name ?? null
+  }, [draft.vehicleId, vehicles])
+
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl)
@@ -661,7 +666,7 @@ export default function NewServiceRecordPage() {
             setCard3Open((v) => !v)
           }}
         >
-          <strong>3) Vehicle</strong>
+          <strong>3) Vehicle{selectedVehicleName ? `: ${selectedVehicleName}` : ''}</strong>
           {step3Done ? <DoneIcon /> : <span className="muted">Required</span>}
         </button>
 
