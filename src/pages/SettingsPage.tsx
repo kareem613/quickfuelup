@@ -69,10 +69,12 @@ export default function SettingsPage() {
   const [busyTest, setBusyTest] = useState(false)
   const [connectedAs, setConnectedAs] = useState<{ username: string; isAdmin: boolean } | null>(null)
   const [installPromptReady, setInstallPromptReady] = useState(Boolean(getDeferredPrompt()))
+  const [shareModalOpen, setShareModalOpen] = useState(false)
   const [sharePasscode, setSharePasscode] = useState('')
   const [shareLink, setShareLink] = useState<string | null>(null)
   const [shareError, setShareError] = useState<string | null>(null)
   const [shareBusy, setShareBusy] = useState(false)
+  const [importModalOpen, setImportModalOpen] = useState(false)
   const [importToken, setImportToken] = useState<string | null>(null)
   const [importPasscode, setImportPasscode] = useState('')
   const [importError, setImportError] = useState<string | null>(null)
@@ -92,6 +94,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const t = new URLSearchParams(location.search).get('cfg')
     setImportToken(t)
+    setImportModalOpen(Boolean(t))
     setImportError(null)
     setImportNotice(null)
     setPendingImport(null)
@@ -182,6 +185,7 @@ export default function SettingsPage() {
       applyConfigToForm(normalized)
       setImportNotice('Imported settings applied.')
       clearImportTokenFromUrl()
+      setImportModalOpen(false)
     } catch (e) {
       setImportError(e instanceof Error ? e.message : 'Failed to decrypt.')
     }
@@ -511,77 +515,193 @@ export default function SettingsPage() {
       <TopNav />
       <h2 style={{ margin: 0 }}>Settings</h2>
 
-      {importToken ? (
-        <div className="card stack">
-          <strong>Import shared settings</strong>
-          {!isShareCryptoSupported() ? (
-            <div className="muted">Import requires a modern browser with WebCrypto support.</div>
-          ) : (
-            <>
-              <div className="muted">This link contains encrypted AppConfig settings only (no drafts or other flags).</div>
-              <div className="field">
-                <label>Passcode</label>
-                <input
-                  type="password"
-                  value={importPasscode}
-                  onChange={(e) => setImportPasscode(e.target.value)}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                />
-              </div>
-              <div className="actions">
-                <button className="btn primary" type="button" onClick={onDecryptImport} disabled={!importPasscode.trim()}>
-                  Decrypt
-                </button>
+      {importToken && importModalOpen ? (
+        <div
+          className="modal-overlay"
+          onMouseDown={(e) => {
+            if (e.target !== e.currentTarget) return
+            setPendingImport(null)
+            setImportModalOpen(false)
+            clearImportTokenFromUrl()
+          }}
+        >
+          <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="card stack">
+              <div className="row" style={{ justifyContent: 'space-between', gap: 10 }}>
+                <strong>Import shared settings</strong>
                 <button
-                  className="btn"
+                  className="btn small"
                   type="button"
                   onClick={() => {
                     setPendingImport(null)
-                    setImportNotice('Import cancelled.')
+                    setImportModalOpen(false)
                     clearImportTokenFromUrl()
                   }}
                 >
-                  Cancel
+                  Close
                 </button>
               </div>
 
-              {pendingImport ? (
-                <div className="card stack" style={{ padding: 10 }}>
-                  <div className="muted">Existing settings were found on this device. Overwrite all existing settings?</div>
+              {!isShareCryptoSupported() ? (
+                <div className="muted">Import requires a modern browser with WebCrypto support.</div>
+              ) : (
+                <>
+                  <div className="muted">This link contains encrypted AppConfig settings only (no drafts or other flags).</div>
+                  <div className="field">
+                    <label>Passcode</label>
+                    <input
+                      type="password"
+                      value={importPasscode}
+                      onChange={(e) => setImportPasscode(e.target.value)}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+                  </div>
                   <div className="actions">
-                    <button
-                      className="btn primary"
-                      type="button"
-                      onClick={() => {
-                        saveConfig(pendingImport)
-                        applyConfigToForm(pendingImport)
-                        setPendingImport(null)
-                        setImportNotice('Imported settings applied.')
-                        clearImportTokenFromUrl()
-                      }}
-                    >
-                      Overwrite all
+                    <button className="btn primary" type="button" onClick={onDecryptImport} disabled={!importPasscode.trim()}>
+                      Decrypt
                     </button>
                     <button
                       className="btn"
                       type="button"
                       onClick={() => {
                         setPendingImport(null)
-                        setImportNotice('Import cancelled.')
+                        setImportModalOpen(false)
                         clearImportTokenFromUrl()
                       }}
                     >
-                      Keep mine
+                      Cancel
                     </button>
                   </div>
-                </div>
-              ) : null}
-            </>
-          )}
-          {importError ? <div className="error">{importError}</div> : null}
-          {importNotice ? <div className="muted">{importNotice}</div> : null}
+
+                  {pendingImport ? (
+                    <div className="card stack" style={{ padding: 10 }}>
+                      <div className="muted">
+                        Existing settings were found on this device. Overwrite all existing settings?
+                      </div>
+                      <div className="actions">
+                        <button
+                          className="btn primary"
+                          type="button"
+                          onClick={() => {
+                            saveConfig(pendingImport)
+                            applyConfigToForm(pendingImport)
+                            setPendingImport(null)
+                            setImportModalOpen(false)
+                            clearImportTokenFromUrl()
+                          }}
+                        >
+                          Overwrite all
+                        </button>
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={() => {
+                            setPendingImport(null)
+                            setImportModalOpen(false)
+                            clearImportTokenFromUrl()
+                          }}
+                        >
+                          Keep mine
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              )}
+              {importError ? <div className="error">{importError}</div> : null}
+              {importNotice ? <div className="muted">{importNotice}</div> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {shareModalOpen ? (
+        <div
+          className="modal-overlay"
+          onMouseDown={(e) => {
+            if (e.target !== e.currentTarget) return
+            setShareModalOpen(false)
+          }}
+        >
+          <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="card stack">
+              <div className="row" style={{ justifyContent: 'space-between', gap: 10 }}>
+                <strong>Share settings</strong>
+                <button className="btn small" type="button" onClick={() => setShareModalOpen(false)}>
+                  Close
+                </button>
+              </div>
+
+              {!isShareCryptoSupported() ? (
+                <div className="muted">Sharing requires a modern browser with WebCrypto support.</div>
+              ) : (
+                <>
+                  <div className="muted">Use a long passcode; anyone with the link can attempt offline guessing.</div>
+                  <div className="field">
+                    <label>Passcode</label>
+                    <input
+                      type="password"
+                      value={sharePasscode}
+                      onChange={(e) => {
+                        setSharePasscode(e.target.value)
+                        setShareLink(null)
+                        setShareError(null)
+                      }}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+                  </div>
+                  <div className="actions">
+                    <button className="btn primary" type="button" onClick={onGenerateShareLink} disabled={!cfg || shareBusy}>
+                      {shareBusy ? 'Generating…' : 'Generate link'}
+                    </button>
+                    {shareLink ? (
+                      <button
+                        className="btn"
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(shareLink)
+                            setShareError(null)
+                          } catch {
+                            setShareError('Could not copy to clipboard.')
+                          }
+                        }}
+                      >
+                        Copy link
+                      </button>
+                    ) : null}
+                    {shareLink && typeof navigator.share === 'function' ? (
+                      <button
+                        className="btn"
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await navigator.share({ url: shareLink, title: 'QuickFillUp settings' })
+                            setShareError(null)
+                          } catch {
+                            // user canceled or share failed
+                          }
+                        }}
+                      >
+                        Share…
+                      </button>
+                    ) : null}
+                  </div>
+                  {shareLink ? (
+                    <div className="field">
+                      <label>Link</label>
+                      <input value={shareLink} readOnly />
+                    </div>
+                  ) : null}
+                </>
+              )}
+              {shareError ? <div className="error">{shareError}</div> : null}
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -869,23 +989,40 @@ export default function SettingsPage() {
           </div>
         ) : null}
 
-        {isPwaInstallEnabled() && !isRunningStandalone() && installPromptReady ? (
-          <button
-            className="btn"
-            type="button"
-            onClick={async () => {
-              const p = getDeferredPrompt()
-              if (!p) return
-              await p.prompt()
-              try {
-                await p.userChoice
-              } finally {
-                setDeferredPrompt(null)
-              }
-            }}
-          >
-            Install app
-          </button>
+        {isPwaInstallEnabled() ? (
+          <div className="actions">
+            {isPwaInstallEnabled() && !isRunningStandalone() && installPromptReady ? (
+              <button
+                className="btn"
+                type="button"
+                onClick={async () => {
+                  const p = getDeferredPrompt()
+                  if (!p) return
+                  await p.prompt()
+                  try {
+                    await p.userChoice
+                  } finally {
+                    setDeferredPrompt(null)
+                  }
+                }}
+              >
+                Install app
+              </button>
+            ) : null}
+
+            <button
+              className="btn"
+              type="button"
+              onClick={() => {
+                setShareModalOpen(true)
+                setShareError(null)
+                setShareLink(null)
+              }}
+              disabled={!cfg || busyTest}
+            >
+              Share settings
+            </button>
+          </div>
         ) : null}
 
         {testResult && <div className={testResult.startsWith('OK') ? 'card' : 'error'}>{testResult}</div>}
@@ -897,76 +1034,6 @@ export default function SettingsPage() {
           device.
         </div>
       )}
-
-      <div className="card stack">
-        <strong>Share settings</strong>
-        {!isShareCryptoSupported() ? (
-          <div className="muted">Sharing requires a modern browser with WebCrypto support.</div>
-        ) : (
-          <>
-            <div className="muted">Use a long passcode; anyone with the link can attempt offline guessing.</div>
-            <div className="field">
-              <label>Passcode</label>
-              <input
-                type="password"
-                value={sharePasscode}
-                onChange={(e) => {
-                  setSharePasscode(e.target.value)
-                  setShareLink(null)
-                  setShareError(null)
-                }}
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-              />
-            </div>
-            <div className="actions">
-              <button className="btn primary" type="button" onClick={onGenerateShareLink} disabled={!cfg || shareBusy}>
-                {shareBusy ? 'Generating…' : 'Generate link'}
-              </button>
-              {shareLink ? (
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(shareLink)
-                      setShareError(null)
-                    } catch {
-                      setShareError('Could not copy to clipboard.')
-                    }
-                  }}
-                >
-                  Copy link
-                </button>
-              ) : null}
-              {shareLink && typeof navigator.share === 'function' ? (
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await navigator.share({ url: shareLink, title: 'QuickFillUp settings' })
-                      setShareError(null)
-                    } catch {
-                      // user canceled or share failed
-                    }
-                  }}
-                >
-                  Share…
-                </button>
-              ) : null}
-            </div>
-            {shareLink ? (
-              <div className="field">
-                <label>Link</label>
-                <input value={shareLink} readOnly />
-              </div>
-            ) : null}
-          </>
-        )}
-        {shareError ? <div className="error">{shareError}</div> : null}
-      </div>
 
       <button className="btn" type="button" onClick={() => navigate('/how-it-works?next=%2Fsettings')}>
         How it works
