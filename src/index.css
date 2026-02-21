@@ -224,6 +224,12 @@ textarea {
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25) inset;
 }
 
+.vehicle-card.selected.warn,
+.vehicle-card.warn.selected {
+  border-color: rgba(245, 158, 11, 0.95);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25) inset;
+}
+
 .vehicle-thumb {
   height: 92px;
   width: 100%;
@@ -324,6 +330,13 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(0, 0, 0, 0.18);
   color: inherit;
+}
+
+.field.warn input,
+.field.warn select,
+.field.warn textarea {
+  border-color: rgba(245, 158, 11, 0.7);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.14) inset;
 }
 
 .btn {

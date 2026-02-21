@@ -75,9 +75,16 @@ export type ServiceRecordExtraction = {
 export type ServiceExtractionResult = {
   records: ServiceRecordExtraction[]
   explanation?: string | null // overall grouping notes / caveats
-  // When true, the LLM believes the user should review because data was missing and/or inferred.
-  hasWarnings?: boolean
+  warnings?: ServiceExtractionWarning[]
   rawJson?: unknown
+}
+
+export type ServiceExtractionWarningReason = 'missing' | 'guessed' | 'uncertain' | 'conflict'
+
+export type ServiceExtractionWarning = {
+  path: string
+  reason: ServiceExtractionWarningReason
+  message?: string | null
 }
 
 export type ServiceDraftRecord = {

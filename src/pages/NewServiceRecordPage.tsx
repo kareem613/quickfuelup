@@ -279,7 +279,14 @@ export default function NewServiceRecordPage() {
   const step3Done = Boolean(
     (draft.records?.length ? draft.records.every((r) => typeof r.form.vehicleId === 'number') : false) || draft.vehicleId,
   )
-  const keepExtractOpen = extractFailed || Boolean(draft.extracted?.hasWarnings)
+  const extractedWarnings = draft.extracted?.warnings ?? []
+  const keepExtractOpen = extractFailed || extractedWarnings.length > 0
+
+  function hasWarningForRecordField(recordIdx: number, field: string) {
+    return extractedWarnings.some((w) => w.path === `/records/${recordIdx}/${field}`)
+  }
+
+  const anyVehicleIdWarning = extractedWarnings.some((w) => /^\/records\/\d+\/vehicleId$/.test(w.path))
 
   useEffect(() => {
     if (!step1Done) {
@@ -732,7 +739,7 @@ export default function NewServiceRecordPage() {
               return (
                 <button
                   key={v.id}
-                  className={`vehicle-card${selected ? ' selected' : ''}`}
+                  className={`vehicle-card${selected ? ' selected' : ''}${selected && anyVehicleIdWarning ? ' warn' : ''}`}
                   onClick={() => {
                     vehicleTouched.current = true
                     setDraft((d) => ({
@@ -776,6 +783,13 @@ export default function NewServiceRecordPage() {
           const canSubmit = recordCanSubmit(r)
           const datalistId = `extra-field-names-${r.id}`
           const isSubmitted = r.status === 'submitted'
+          const warnRecordType = hasWarningForRecordField(idx, 'recordType')
+          const warnDate = hasWarningForRecordField(idx, 'date')
+          const warnOdometer = hasWarningForRecordField(idx, 'odometer')
+          const warnDescription = hasWarningForRecordField(idx, 'description')
+          const warnTotalCost = hasWarningForRecordField(idx, 'totalCost')
+          const warnTags = hasWarningForRecordField(idx, 'tags')
+          const warnNotes = hasWarningForRecordField(idx, 'notes')
           return (
             <div key={r.id} className="card stack" style={{ padding: 14 }}>
               <div className="row">
@@ -790,7 +804,7 @@ export default function NewServiceRecordPage() {
               ) : null}
 
               <div className="grid two no-collapse">
-                <div className="field">
+                <div className={`field${warnRecordType ? ' warn' : ''}`}>
                   <label>Record type</label>
                   <select
                     value={r.form.recordType ?? ''}
@@ -811,7 +825,7 @@ export default function NewServiceRecordPage() {
                     <option value="upgrade">Upgrade</option>
                   </select>
                 </div>
-                <div className="field">
+                <div className={`field${warnDate ? ' warn' : ''}`}>
                   <label>Date</label>
                   <input
                     type="date"
@@ -822,7 +836,7 @@ export default function NewServiceRecordPage() {
                 </div>
               </div>
 
-              <div className="field">
+              <div className={`field${warnOdometer ? ' warn' : ''}`}>
                 <label>Odometer</label>
                 <input
                   inputMode="numeric"
@@ -835,7 +849,7 @@ export default function NewServiceRecordPage() {
                 />
               </div>
 
-              <div className="field">
+              <div className={`field${warnDescription ? ' warn' : ''}`}>
                 <label>Description</label>
                 <input
                   value={r.form.description ?? ''}
@@ -845,7 +859,7 @@ export default function NewServiceRecordPage() {
               </div>
 
               <div className="grid two no-collapse">
-                <div className="field">
+                <div className={`field${warnTotalCost ? ' warn' : ''}`}>
                   <label>Total cost</label>
                   <input
                     inputMode="decimal"
@@ -857,7 +871,7 @@ export default function NewServiceRecordPage() {
                     disabled={submitBusy || isSubmitted}
                   />
                 </div>
-                <div className="field">
+                <div className={`field${warnTags ? ' warn' : ''}`}>
                   <label>Tags (optional)</label>
                   <input
                     value={r.form.tags ?? ''}
@@ -868,7 +882,7 @@ export default function NewServiceRecordPage() {
                 </div>
               </div>
 
-              <div className="field">
+              <div className={`field${warnNotes ? ' warn' : ''}`}>
                 <label>Notes (optional)</label>
                 <textarea
                   rows={2}
