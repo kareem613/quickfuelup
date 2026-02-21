@@ -655,7 +655,9 @@ export default function NewServiceRecordPage() {
           </div>
         ) : null}
 
-        {!hasRecords ? <div className="muted">No extracted records yet.</div> : null}
+        {!hasRecords ? (
+          <div className="muted">{extractBusy ? 'Extracting records. This can take a minute.' : 'No extracted records yet.'}</div>
+        ) : null}
 
         {(draft.records ?? []).map((r, idx) => {
           const required = requiredExtraFieldsFor(r.form.recordType)
