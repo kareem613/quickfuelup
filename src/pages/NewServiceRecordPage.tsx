@@ -279,6 +279,7 @@ export default function NewServiceRecordPage() {
   const step3Done = Boolean(
     (draft.records?.length ? draft.records.every((r) => typeof r.form.vehicleId === 'number') : false) || draft.vehicleId,
   )
+  const keepExtractOpen = extractFailed || Boolean(draft.extracted?.hasWarnings)
 
   useEffect(() => {
     if (!step1Done) {
@@ -295,8 +296,8 @@ export default function NewServiceRecordPage() {
       card2Touched.current = false
       return
     }
-    if (!card2Touched.current) setCard2Open(false)
-  }, [step2Done])
+    if (!card2Touched.current) setCard2Open(keepExtractOpen)
+  }, [keepExtractOpen, step2Done])
 
   useEffect(() => {
     if (!step3Done) {

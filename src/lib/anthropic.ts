@@ -126,22 +126,23 @@ export async function extractServiceFromDocumentAnthropic(params: {
  Your job is to create a sensible set of LubeLogger records from this document.
  This is NOT necessarily one record per line item: group logically into records that represent one service event/visit.
 
- Return JSON ONLY matching this TypeScript type:
- {
-  "records": Array<{
-    "recordType": "service" | "repair" | "upgrade" | null,
-    "vehicleId": number | null,
-    "date": string | null,
-    "odometer": number | null,
-    "description": string | null,   // VERY concise summary (e.g. "AC repair", "Oil change")
-    "totalCost": number | null,
-    "notes"?: string | null,
-    "tags"?: string | null,
-    "extraFields"?: { "name": string, "value": string }[] | null,
-    "explanation"?: string | null
-  }>,
-  "explanation"?: string | null
-}
+  Return JSON ONLY matching this TypeScript type:
+  {
+   "records": Array<{
+     "recordType": "service" | "repair" | "upgrade" | null,
+     "vehicleId": number | null,
+     "date": string | null,
+     "odometer": number | null,
+     "description": string | null,   // VERY concise summary (e.g. "AC repair", "Oil change")
+     "totalCost": number | null,
+     "notes"?: string | null,
+     "tags"?: string | null,
+     "extraFields"?: { "name": string, "value": string }[] | null,
+     "explanation"?: string | null
+   }>,
+   "explanation"?: string | null,
+   "hasWarnings": boolean
+ }
 
 Available vehicles (pick one vehicleId if confident; otherwise null):
 ${vehiclesText}
@@ -152,13 +153,14 @@ ${extraFieldsText}
 Document text (may be empty for scanned PDFs):
 ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(none)'}
 
- Rules:
- - Return only valid JSON (no markdown, no backticks).
- - Use '.' as decimal separator.
- - If you choose a recordType, choose the one that best matches the work (service=scheduled maintenance, repair=unplanned fix, upgrade=enhancement).
- - Create between 1 and 8 records; prefer fewer records unless there are clearly distinct visits/dates/vehicles.
- - Do not produce a record for every part.
- - Keep "description" VERY concise (2-6 words). Put the detailed work performed (parts/labor/steps) in "notes".
+  Rules:
+  - Return only valid JSON (no markdown, no backticks).
+  - Use '.' as decimal separator.
+  - Set "hasWarnings" to true if there is missing required info (any nulls for important fields like vehicleId/date/odometer/description/totalCost), and/or you made an educated guess / are not fully confident about any value. Otherwise set it to false.
+  - If you choose a recordType, choose the one that best matches the work (service=scheduled maintenance, repair=unplanned fix, upgrade=enhancement).
+  - Create between 1 and 8 records; prefer fewer records unless there are clearly distinct visits/dates/vehicles.
+  - Do not produce a record for every part.
+  - Keep "description" VERY concise (2-6 words). Put the detailed work performed (parts/labor/steps) in "notes".
    Example: description="AC repair", notes="Evacuated/recharged system; replaced condenser; replaced O-rings; leak test; added dye."
  - Cost math (do this when the invoice is itemized and shows subtotal/tax/total):
    - Treat EVERY charge as a line item amount that must be counted: parts, labor, fees, shop supplies, discounts/credits (negative), etc.

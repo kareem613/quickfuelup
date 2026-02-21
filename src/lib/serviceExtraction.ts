@@ -30,6 +30,8 @@ export const ServiceExtractionSchema = z.object({
 export const ServiceExtractionResultSchema = z.object({
   records: z.array(ServiceExtractionSchema).min(1),
   explanation: NullableTrimmedString.optional(),
+  // When true, the LLM believes the user should review because data was missing and/or inferred.
+  hasWarnings: z.boolean().optional(),
 })
 
 export type ServiceExtraction = z.infer<typeof ServiceExtractionSchema>
