@@ -135,6 +135,7 @@ export default function NewEntryPage() {
   const [imageBusy, setImageBusy] = useState(false)
   const [extractBusy, setExtractBusy] = useState(false)
   const [submitBusy, setSubmitBusy] = useState(false)
+  const [submitAttempted, setSubmitAttempted] = useState(false)
   const [extractFailed, setExtractFailed] = useState(false)
   const [extractLlmMessage, setExtractLlmMessage] = useState<string | null>(null)
   const [forceExtractTick, setForceExtractTick] = useState(0)
@@ -370,10 +371,14 @@ export default function NewEntryPage() {
   async function onSubmit() {
     if (!draft.vehicleId) return
     if (!cfg) return
+    setSubmitAttempted(true)
+    if (!canSubmit) {
+      setError('Please confirm odometer, fuel quantity, and total cost.')
+      return
+    }
     setSubmitBusy(true)
     setError(null)
     try {
-      if (!canSubmit) throw new Error('Please confirm odometer, fuel quantity, and total cost.')
       const res = await addGasRecord(cfg, {
         vehicleId: draft.vehicleId,
         dateMMDDYYYY: toMMDDYYYY(draft.date),
@@ -388,6 +393,7 @@ export default function NewEntryPage() {
       await clearDraft()
       setDraft({ date: todayISODate(), form: { isfilltofull: true, missedfuelup: false } })
       lastExtractSigRef.current = ''
+      setSubmitAttempted(false)
       setSuccessOpen(true)
       // Keep response in console for now; UX can add a toast later.
       console.log('Submitted', res)
@@ -689,7 +695,11 @@ export default function NewEntryPage() {
           </div>
         ) : null}
 
-        <div className="field">
+        <div
+          className={`field${
+            submitAttempted && !(typeof form.odometer === 'number' && Number.isFinite(form.odometer) && form.odometer >= 0) ? ' invalid' : ''
+          }`}
+        >
           <label>Odometer</label>
           <input
             inputMode="numeric"
@@ -706,7 +716,13 @@ export default function NewEntryPage() {
         </div>
 
         <div className="grid two no-collapse">
-          <div className="field">
+          <div
+            className={`field${
+              submitAttempted && !(typeof form.fuelconsumed === 'number' && Number.isFinite(form.fuelconsumed) && form.fuelconsumed > 0)
+                ? ' invalid'
+                : ''
+            }`}
+          >
             <label>Fuel quantity</label>
             <input
               inputMode="decimal"
@@ -721,7 +737,11 @@ export default function NewEntryPage() {
               disabled={!canEditDetails || submitBusy}
             />
           </div>
-          <div className="field">
+          <div
+            className={`field${
+              submitAttempted && !(typeof form.cost === 'number' && Number.isFinite(form.cost) && form.cost > 0) ? ' invalid' : ''
+            }`}
+          >
             <label>Total cost</label>
             <input
               inputMode="decimal"
@@ -788,7 +808,7 @@ export default function NewEntryPage() {
         </div>
 
         <div className="actions">
-          <button className="btn primary" disabled={!canSubmit || submitBusy || extractBusy} onClick={onSubmit} type="button">
+          <button className="btn primary" disabled={submitBusy || extractBusy} onClick={onSubmit} type="button">
             {submitBusy ? 'Submitting…' : 'Submit to LubeLogger'}
           </button>
           <button
@@ -799,6 +819,7 @@ export default function NewEntryPage() {
               lastExtractSigRef.current = ''
               setExtractFailed(false)
               setExtractLlmMessage(null)
+              setSubmitAttempted(false)
               setDraft({ date: todayISODate(), form: { isfilltofull: true, missedfuelup: false } })
             }}
             type="button"

@@ -287,6 +287,7 @@ export default function NewServiceRecordPage() {
   }
 
   const anyVehicleIdWarning = extractedWarnings.some((w) => /^\/records\/\d+\/vehicleId$/.test(w.path))
+  const anyVehicleIdInvalid = (draft.records ?? []).some((r) => r.validationAttempted && typeof r.form.vehicleId !== 'number')
 
   useEffect(() => {
     if (!step1Done) {
@@ -425,11 +426,12 @@ export default function NewServiceRecordPage() {
 
   function recordCanSubmit(r: ServiceDraftRecord) {
     const req = requiredExtraFieldsFor(r.form.recordType)
+    const date = r.form.date ?? draft.date
     return (
       typeof r.form.vehicleId === 'number' &&
       Boolean(r.form.recordType) &&
-      typeof r.form.date === 'string' &&
-      Boolean(r.form.date) &&
+      typeof date === 'string' &&
+      Boolean(date) &&
       typeof r.form.odometer === 'number' &&
       Number.isFinite(r.form.odometer) &&
       r.form.odometer >= 0 &&
@@ -452,6 +454,12 @@ export default function NewServiceRecordPage() {
     if (!rec) return
     if (!recordCanSubmit(rec)) {
       setError('Please confirm vehicle, record type, date, odometer, description, cost, and required extra fields.')
+      const missingVehicle = typeof rec.form.vehicleId !== 'number'
+      if (missingVehicle) setCard3Open(true)
+      setDraft((d) => ({
+        ...d,
+        records: (d.records ?? []).map((r) => (r.id === id ? { ...r, validationAttempted: true } : r)),
+      }))
       return
     }
 
@@ -472,7 +480,7 @@ export default function NewServiceRecordPage() {
       const res = await addServiceLikeRecord(cfg, {
         recordType: rec.form.recordType!,
         vehicleId: rec.form.vehicleId!,
-        dateMMDDYYYY: toMMDDYYYY(rec.form.date!),
+        dateMMDDYYYY: toMMDDYYYY(rec.form.date ?? draft.date),
         odometer: rec.form.odometer!,
         description: rec.form.description!.trim(),
         cost: rec.form.cost!,
@@ -714,7 +722,10 @@ export default function NewServiceRecordPage() {
         )}
       </div>
 
-      <div className={`card stack${step3Done && !card3Open ? ' collapsed' : ''}`} style={{ opacity: step1Done ? 1 : 0.6 }}>
+      <div
+        className={`card stack${step3Done && !card3Open ? ' collapsed' : ''}${anyVehicleIdInvalid ? ' invalid' : ''}`}
+        style={{ opacity: step1Done ? 1 : 0.6 }}
+      >
         <button
           className="row card-header-btn"
           type="button"
@@ -780,9 +791,17 @@ export default function NewServiceRecordPage() {
 
         {(draft.records ?? []).map((r, idx) => {
           const required = requiredExtraFieldsFor(r.form.recordType)
-          const canSubmit = recordCanSubmit(r)
           const datalistId = `extra-field-names-${r.id}`
           const isSubmitted = r.status === 'submitted'
+          const attempted = Boolean(r.validationAttempted)
+
+          const invalidRecordType = attempted && !r.form.recordType
+          const invalidOdometer =
+            attempted && !(typeof r.form.odometer === 'number' && Number.isFinite(r.form.odometer) && r.form.odometer >= 0)
+          const invalidDescription = attempted && !(typeof r.form.description === 'string' && Boolean(r.form.description.trim()))
+          const invalidTotalCost =
+            attempted && !(typeof r.form.cost === 'number' && Number.isFinite(r.form.cost) && r.form.cost > 0)
+          const invalidDate = attempted && !(typeof (r.form.date ?? draft.date) === 'string' && Boolean(r.form.date ?? draft.date))
           const warnRecordType = hasWarningForRecordField(idx, 'recordType')
           const warnDate = hasWarningForRecordField(idx, 'date')
           const warnOdometer = hasWarningForRecordField(idx, 'odometer')
@@ -804,7 +823,7 @@ export default function NewServiceRecordPage() {
               ) : null}
 
               <div className="grid two no-collapse">
-                <div className={`field${warnRecordType ? ' warn' : ''}`}>
+                <div className={`field${warnRecordType ? ' warn' : ''}${invalidRecordType ? ' invalid' : ''}`}>
                   <label>Record type</label>
                   <select
                     value={r.form.recordType ?? ''}
@@ -825,7 +844,7 @@ export default function NewServiceRecordPage() {
                     <option value="upgrade">Upgrade</option>
                   </select>
                 </div>
-                <div className={`field${warnDate ? ' warn' : ''}`}>
+                <div className={`field${warnDate ? ' warn' : ''}${invalidDate ? ' invalid' : ''}`}>
                   <label>Date</label>
                   <input
                     type="date"
@@ -836,7 +855,7 @@ export default function NewServiceRecordPage() {
                 </div>
               </div>
 
-              <div className={`field${warnOdometer ? ' warn' : ''}`}>
+              <div className={`field${warnOdometer ? ' warn' : ''}${invalidOdometer ? ' invalid' : ''}`}>
                 <label>Odometer</label>
                 <input
                   inputMode="numeric"
@@ -849,7 +868,7 @@ export default function NewServiceRecordPage() {
                 />
               </div>
 
-              <div className={`field${warnDescription ? ' warn' : ''}`}>
+              <div className={`field${warnDescription ? ' warn' : ''}${invalidDescription ? ' invalid' : ''}`}>
                 <label>Description</label>
                 <input
                   value={r.form.description ?? ''}
@@ -859,7 +878,7 @@ export default function NewServiceRecordPage() {
               </div>
 
               <div className="grid two no-collapse">
-                <div className={`field${warnTotalCost ? ' warn' : ''}`}>
+                <div className={`field${warnTotalCost ? ' warn' : ''}${invalidTotalCost ? ' invalid' : ''}`}>
                   <label>Total cost</label>
                   <input
                     inputMode="decimal"
@@ -930,7 +949,7 @@ export default function NewServiceRecordPage() {
                           list={datalistId}
                         />
                       </div>
-                      <div className="field">
+                      <div className={`field${missingRequired && attempted ? ' invalid' : ''}`}>
                         <label>{missingRequired ? 'Value (required)' : 'Value'}</label>
                         <input
                           value={ef.value}
@@ -976,7 +995,7 @@ export default function NewServiceRecordPage() {
               <div className="actions">
                 <button
                   className="btn primary"
-                  disabled={!canSubmit || submitBusy || extractBusy || docBusy || isSubmitted}
+                  disabled={submitBusy || extractBusy || docBusy || isSubmitted}
                   onClick={() => onSubmitRecord(r.id)}
                   type="button"
                 >

@@ -91,6 +91,7 @@ export type ServiceDraftRecord = {
   id: string
   vehicleTouched?: boolean
   recordTypeTouched?: boolean
+  validationAttempted?: boolean
   status?: 'pending' | 'submitting' | 'submitted' | 'failed'
   submitError?: string
   extracted?: ServiceRecordExtraction
