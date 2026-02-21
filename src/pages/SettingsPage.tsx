@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { loadConfig, saveConfig } from '../lib/config'
 import type { AppConfig, LlmProvider } from '../lib/types'
@@ -51,6 +51,19 @@ export default function SettingsPage() {
   const [geminiModelService, setGeminiModelService] = useState(existing?.llm.geminiModelService ?? '')
   const [anthropicModelFuel, setAnthropicModelFuel] = useState(existing?.llm.anthropicModelFuel ?? '')
   const [anthropicModelService, setAnthropicModelService] = useState(existing?.llm.anthropicModelService ?? '')
+  const [geminiModels, setGeminiModels] = useState<string[]>([
+    'gemini-2.5-pro',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-flash-latest',
+    'gemini-1.5-pro-latest',
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-pro',
+    'gemini-1.5-flash',
+  ])
+  const [anthropicModels, setAnthropicModels] = useState<string[]>(['claude-haiku-4-5', 'claude-sonnet-4-5', 'claude-opus-4-5'])
+  const lastGeminiModelsKeyRef = useRef<string>('')
+  const lastAnthropicModelsKeyRef = useRef<string>('')
   const [cultureInvariant, setCultureInvariant] = useState(existing?.cultureInvariant ?? true)
   const [testResult, setTestResult] = useState<string | null>(null)
   const [busyTest, setBusyTest] = useState(false)
@@ -230,6 +243,77 @@ export default function SettingsPage() {
     })
   }
 
+  async function loadGeminiModels() {
+    const key = geminiApiKey.trim()
+    if (!key) return
+    if (lastGeminiModelsKeyRef.current === key) return
+    lastGeminiModelsKeyRef.current = key
+    try {
+      const res = await fetchWithTimeout(
+        'https://generativelanguage.googleapis.com/v1beta/models',
+        { headers: { 'x-goog-api-key': key } },
+        6000,
+      )
+      const data = (await res.json()) as unknown
+      const models =
+        typeof data === 'object' && data !== null && Array.isArray((data as Record<string, unknown>).models)
+          ? ((data as Record<string, unknown>).models as unknown[])
+          : []
+      const names = models
+        .map((m) => {
+          if (typeof m !== 'object' || m === null) return null
+          const obj = m as Record<string, unknown>
+          const name = typeof obj.name === 'string' ? obj.name : null
+          const methods = Array.isArray(obj.supportedGenerationMethods) ? (obj.supportedGenerationMethods as unknown[]) : []
+          const supportsGenerate = methods.some((x) => x === 'generateContent')
+          if (!name || !supportsGenerate) return null
+          // API returns "models/<id>"
+          const id = name.startsWith('models/') ? name.slice('models/'.length) : name
+          return id
+        })
+        .filter((x): x is string => Boolean(x && x.startsWith('gemini-')))
+      if (names.length) setGeminiModels(Array.from(new Set([...names, ...geminiModels])).sort())
+    } catch {
+      // keep existing static list
+    }
+  }
+
+  async function loadAnthropicModels() {
+    const key = anthropicApiKey.trim()
+    if (!key) return
+    if (lastAnthropicModelsKeyRef.current === key) return
+    lastAnthropicModelsKeyRef.current = key
+    try {
+      const res = await fetchWithTimeout(
+        'https://api.anthropic.com/v1/models',
+        {
+          headers: {
+            'content-type': 'application/json',
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
+            'x-api-key': key,
+          },
+        },
+        6000,
+      )
+      const data = (await res.json()) as unknown
+      const items =
+        typeof data === 'object' && data !== null && Array.isArray((data as Record<string, unknown>).data)
+          ? ((data as Record<string, unknown>).data as unknown[])
+          : []
+      const ids = items
+        .map((m) => {
+          if (typeof m !== 'object' || m === null) return null
+          const obj = m as Record<string, unknown>
+          return typeof obj.id === 'string' ? obj.id : null
+        })
+        .filter((x): x is string => Boolean(x))
+      if (ids.length) setAnthropicModels(Array.from(new Set([...ids, ...anthropicModels])).sort())
+    } catch {
+      // keep existing static list
+    }
+  }
+
   return (
     <div className="container stack">
       <div className="row">
@@ -342,11 +426,13 @@ export default function SettingsPage() {
           <input
             value={geminiModelFuel}
             onChange={(e) => setGeminiModelFuel(e.target.value)}
-            placeholder="(default)"
+            placeholder="(default: gemini-2.5-flash)"
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
             list="gemini-models"
+            onFocus={loadGeminiModels}
+            onMouseDown={loadGeminiModels}
           />
         </div>
 
@@ -355,11 +441,13 @@ export default function SettingsPage() {
           <input
             value={geminiModelService}
             onChange={(e) => setGeminiModelService(e.target.value)}
-            placeholder="(default)"
+            placeholder="(default: gemini-2.5-pro)"
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
             list="gemini-models"
+            onFocus={loadGeminiModels}
+            onMouseDown={loadGeminiModels}
           />
         </div>
 
@@ -368,11 +456,13 @@ export default function SettingsPage() {
           <input
             value={anthropicModelFuel}
             onChange={(e) => setAnthropicModelFuel(e.target.value)}
-            placeholder="(default)"
+            placeholder="(default: claude-haiku-4-5)"
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
             list="anthropic-models"
+            onFocus={loadAnthropicModels}
+            onMouseDown={loadAnthropicModels}
           />
         </div>
 
@@ -381,29 +471,26 @@ export default function SettingsPage() {
           <input
             value={anthropicModelService}
             onChange={(e) => setAnthropicModelService(e.target.value)}
-            placeholder="(default)"
+            placeholder="(default: claude-haiku-4-5)"
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
             list="anthropic-models"
+            onFocus={loadAnthropicModels}
+            onMouseDown={loadAnthropicModels}
           />
         </div>
 
         <datalist id="gemini-models">
-          <option value="gemini-2.5-pro" />
-          <option value="gemini-2.5-flash" />
-          <option value="gemini-2.5-flash-lite" />
-          <option value="gemini-flash-latest" />
-          <option value="gemini-1.5-pro-latest" />
-          <option value="gemini-1.5-flash-latest" />
-          <option value="gemini-1.5-pro" />
-          <option value="gemini-1.5-flash" />
+          {geminiModels.map((m) => (
+            <option key={m} value={m} />
+          ))}
         </datalist>
 
         <datalist id="anthropic-models">
-          <option value="claude-haiku-4-5" />
-          <option value="claude-sonnet-4-5" />
-          <option value="claude-opus-4-5" />
+          {anthropicModels.map((m) => (
+            <option key={m} value={m} />
+          ))}
         </datalist>
 
         {!hasAnyLlmKey ? <div className="muted">No LLM keys set. You can still enter values manually.</div> : null}

@@ -20,6 +20,7 @@ export async function extractFromImages(params: {
   // Gemini model names vary by account/API version; try a small, explicit fallback list.
   const modelNames = [
     ...(params.model?.trim() ? [params.model.trim()] : []),
+    'gemini-2.5-flash',
     'gemini-2.0-flash',
     'gemini-1.5-flash-latest',
     'gemini-1.5-pro-latest',
