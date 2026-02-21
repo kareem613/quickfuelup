@@ -101,15 +101,21 @@ export default function SettingsPage() {
           useProxy: false,
           llm: {
            providerOrder: activeProviders,
-           ...(geminiApiKey.trim() ? { geminiApiKey: geminiApiKey.trim() } : null),
-           ...(anthropicApiKey.trim() ? { anthropicApiKey: anthropicApiKey.trim() } : null),
-           ...(geminiModelFuel.trim() ? { geminiModelFuel: geminiModelFuel.trim() } : null),
-           ...(geminiModelService.trim() ? { geminiModelService: geminiModelService.trim() } : null),
-           ...(anthropicModelFuel.trim() ? { anthropicModelFuel: anthropicModelFuel.trim() } : null),
-           ...(anthropicModelService.trim() ? { anthropicModelService: anthropicModelService.trim() } : null),
-          },
-        }
-      : null
+            ...(geminiApiKey.trim() ? { geminiApiKey: geminiApiKey.trim() } : null),
+            ...(anthropicApiKey.trim() ? { anthropicApiKey: anthropicApiKey.trim() } : null),
+            ...(normalizeModelInput(geminiModelFuel) ? { geminiModelFuel: normalizeModelInput(geminiModelFuel) } : null),
+            ...(normalizeModelInput(geminiModelService)
+              ? { geminiModelService: normalizeModelInput(geminiModelService) }
+              : null),
+            ...(normalizeModelInput(anthropicModelFuel)
+              ? { anthropicModelFuel: normalizeModelInput(anthropicModelFuel) }
+              : null),
+            ...(normalizeModelInput(anthropicModelService)
+              ? { anthropicModelService: normalizeModelInput(anthropicModelService) }
+              : null),
+           },
+         }
+       : null
 
   function resolveWhoamiUrl() {
     if (!cfg) return null
@@ -264,6 +270,10 @@ export default function SettingsPage() {
 
   const sortedGeminiModels = useMemo(() => sortModels('gemini', geminiModels), [geminiModels])
   const sortedAnthropicModels = useMemo(() => sortModels('anthropic', anthropicModels), [anthropicModels])
+
+  function normalizeModelInput(v: string) {
+    return v.trim().replace(/\s*\(\$+\)\s*$/, '')
+  }
 
   function moveProvider(from: number, to: number) {
     setProviderOrder((prev) => {
@@ -460,7 +470,7 @@ export default function SettingsPage() {
           </label>
           <input
             value={geminiModelFuel}
-            onChange={(e) => setGeminiModelFuel(e.target.value)}
+            onChange={(e) => setGeminiModelFuel(normalizeModelInput(e.target.value))}
             placeholder={`(default: ${DEFAULT_GEMINI_FUEL})`}
             autoCapitalize="none"
             autoCorrect="off"
@@ -477,7 +487,7 @@ export default function SettingsPage() {
           </label>
           <input
             value={geminiModelService}
-            onChange={(e) => setGeminiModelService(e.target.value)}
+            onChange={(e) => setGeminiModelService(normalizeModelInput(e.target.value))}
             placeholder={`(default: ${DEFAULT_GEMINI_SERVICE})`}
             autoCapitalize="none"
             autoCorrect="off"
@@ -494,7 +504,7 @@ export default function SettingsPage() {
           </label>
           <input
             value={anthropicModelFuel}
-            onChange={(e) => setAnthropicModelFuel(e.target.value)}
+            onChange={(e) => setAnthropicModelFuel(normalizeModelInput(e.target.value))}
             placeholder={`(default: ${DEFAULT_ANTHROPIC_FUEL})`}
             autoCapitalize="none"
             autoCorrect="off"
@@ -511,7 +521,7 @@ export default function SettingsPage() {
           </label>
           <input
             value={anthropicModelService}
-            onChange={(e) => setAnthropicModelService(e.target.value)}
+            onChange={(e) => setAnthropicModelService(normalizeModelInput(e.target.value))}
             placeholder={`(default: ${DEFAULT_ANTHROPIC_SERVICE})`}
             autoCapitalize="none"
             autoCorrect="off"
@@ -524,13 +534,13 @@ export default function SettingsPage() {
 
         <datalist id="gemini-models">
           {sortedGeminiModels.map((m) => (
-            <option key={m} value={m} label={`${costBadge('gemini', m)} ${m}`} />
+            <option key={m} value={`${m} (${costBadge('gemini', m)})`} />
           ))}
         </datalist>
 
         <datalist id="anthropic-models">
           {sortedAnthropicModels.map((m) => (
-            <option key={m} value={m} label={`${costBadge('anthropic', m)} ${m}`} />
+            <option key={m} value={`${m} (${costBadge('anthropic', m)})`} />
           ))}
         </datalist>
 
