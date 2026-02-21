@@ -11,6 +11,7 @@ async function blobToBase64(blob: Blob): Promise<string> {
 
 export async function extractFromImagesAnthropic(params: {
   apiKey: string
+  model?: string
   pumpImage: Blob
   odometerImage: Blob
 }) {
@@ -48,7 +49,7 @@ Rules:
       'x-api-key': params.apiKey,
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5',
+      model: params.model?.trim() || 'claude-haiku-4-5',
       max_tokens: 300,
       messages: [
         {
@@ -106,6 +107,7 @@ Rules:
 
 export async function extractServiceFromDocumentAnthropic(params: {
   apiKey: string
+  model?: string
   images?: Blob[]
   documentText?: string
   vehicles: { id: number; name: string }[]
@@ -192,7 +194,7 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
       'x-api-key': params.apiKey,
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5',
+      model: params.model?.trim() || 'claude-haiku-4-5',
       max_tokens: 500,
       messages: [{ role: 'user', content }],
     }),

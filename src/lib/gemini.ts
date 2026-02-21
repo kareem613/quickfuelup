@@ -12,18 +12,20 @@ async function blobToBase64(blob: Blob): Promise<string> {
 
 export async function extractFromImages(params: {
   apiKey: string
+  model?: string
   pumpImage: Blob
   odometerImage: Blob
 }) {
   const genAI = new GoogleGenerativeAI(params.apiKey)
   // Gemini model names vary by account/API version; try a small, explicit fallback list.
   const modelNames = [
+    ...(params.model?.trim() ? [params.model.trim()] : []),
     'gemini-2.0-flash',
     'gemini-1.5-flash-latest',
     'gemini-1.5-pro-latest',
     'gemini-1.5-flash',
     'gemini-1.5-pro',
-  ] as const
+  ]
 
   const prompt = `
  You will be given two photos:
@@ -85,6 +87,7 @@ Rules:
 
 export async function extractServiceFromDocument(params: {
   apiKey: string
+  model?: string
   images?: Blob[]
   documentText?: string
   vehicles: { id: number; name: string }[]
@@ -92,6 +95,7 @@ export async function extractServiceFromDocument(params: {
 }) {
   const genAI = new GoogleGenerativeAI(params.apiKey)
   const modelNames = [
+    ...(params.model?.trim() ? [params.model.trim()] : []),
     // Prefer a stronger model for service invoice reasoning.
     // Docs: https://ai.google.dev/gemini-api/docs/models/gemini
     'gemini-2.5-pro',
@@ -101,7 +105,7 @@ export async function extractServiceFromDocument(params: {
     'gemini-1.5-flash-latest',
     'gemini-1.5-pro',
     'gemini-1.5-flash',
-  ] as const
+  ]
 
   const vehiclesText = params.vehicles.map((v) => `- ${v.id}: ${v.name}`).join('\n')
   const extraFieldsText = params.extraFieldNamesByRecordType

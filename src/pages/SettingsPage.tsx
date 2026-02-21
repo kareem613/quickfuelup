@@ -47,6 +47,10 @@ export default function SettingsPage() {
   })
   const [geminiApiKey, setGeminiApiKey] = useState(existing?.llm.geminiApiKey ?? '')
   const [anthropicApiKey, setAnthropicApiKey] = useState(existing?.llm.anthropicApiKey ?? '')
+  const [geminiModelFuel, setGeminiModelFuel] = useState(existing?.llm.geminiModelFuel ?? '')
+  const [geminiModelService, setGeminiModelService] = useState(existing?.llm.geminiModelService ?? '')
+  const [anthropicModelFuel, setAnthropicModelFuel] = useState(existing?.llm.anthropicModelFuel ?? '')
+  const [anthropicModelService, setAnthropicModelService] = useState(existing?.llm.anthropicModelService ?? '')
   const [cultureInvariant, setCultureInvariant] = useState(existing?.cultureInvariant ?? true)
   const [testResult, setTestResult] = useState<string | null>(null)
   const [busyTest, setBusyTest] = useState(false)
@@ -83,9 +87,13 @@ export default function SettingsPage() {
           cultureInvariant,
           useProxy: false,
           llm: {
-          providerOrder: activeProviders,
-          ...(geminiApiKey.trim() ? { geminiApiKey: geminiApiKey.trim() } : null),
-          ...(anthropicApiKey.trim() ? { anthropicApiKey: anthropicApiKey.trim() } : null),
+           providerOrder: activeProviders,
+           ...(geminiApiKey.trim() ? { geminiApiKey: geminiApiKey.trim() } : null),
+           ...(anthropicApiKey.trim() ? { anthropicApiKey: anthropicApiKey.trim() } : null),
+           ...(geminiModelFuel.trim() ? { geminiModelFuel: geminiModelFuel.trim() } : null),
+           ...(geminiModelService.trim() ? { geminiModelService: geminiModelService.trim() } : null),
+           ...(anthropicModelFuel.trim() ? { anthropicModelFuel: anthropicModelFuel.trim() } : null),
+           ...(anthropicModelService.trim() ? { anthropicModelService: anthropicModelService.trim() } : null),
           },
         }
       : null
@@ -328,6 +336,75 @@ export default function SettingsPage() {
             spellCheck={false}
           />
         </div>
+
+        <div className="field">
+          <label>Gemini model (Fuel)</label>
+          <input
+            value={geminiModelFuel}
+            onChange={(e) => setGeminiModelFuel(e.target.value)}
+            placeholder="(default)"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            list="gemini-models"
+          />
+        </div>
+
+        <div className="field">
+          <label>Gemini model (Service)</label>
+          <input
+            value={geminiModelService}
+            onChange={(e) => setGeminiModelService(e.target.value)}
+            placeholder="(default)"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            list="gemini-models"
+          />
+        </div>
+
+        <div className="field">
+          <label>Anthropic model (Fuel)</label>
+          <input
+            value={anthropicModelFuel}
+            onChange={(e) => setAnthropicModelFuel(e.target.value)}
+            placeholder="(default)"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            list="anthropic-models"
+          />
+        </div>
+
+        <div className="field">
+          <label>Anthropic model (Service)</label>
+          <input
+            value={anthropicModelService}
+            onChange={(e) => setAnthropicModelService(e.target.value)}
+            placeholder="(default)"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            list="anthropic-models"
+          />
+        </div>
+
+        <datalist id="gemini-models">
+          <option value="gemini-2.5-pro" />
+          <option value="gemini-2.5-flash" />
+          <option value="gemini-2.5-flash-lite" />
+          <option value="gemini-flash-latest" />
+          <option value="gemini-1.5-pro-latest" />
+          <option value="gemini-1.5-flash-latest" />
+          <option value="gemini-1.5-pro" />
+          <option value="gemini-1.5-flash" />
+        </datalist>
+
+        <datalist id="anthropic-models">
+          <option value="claude-haiku-4-5" />
+          <option value="claude-sonnet-4-5" />
+          <option value="claude-opus-4-5" />
+        </datalist>
 
         {!hasAnyLlmKey ? <div className="muted">No LLM keys set. You can still enter values manually.</div> : null}
 

@@ -3,23 +3,26 @@ import { extractFromImagesAnthropic, extractServiceFromDocumentAnthropic } from 
 import { extractFromImages as extractFromImagesGemini, extractServiceFromDocument } from './gemini'
 import { ServiceExtractionResultSchema } from './serviceExtraction'
 
-export type ProviderWithKey = { provider: LlmProvider; apiKey: string }
+export type ProviderWithKey = { provider: LlmProvider; apiKey: string; model?: string }
 
 export async function extractFromImagesViaProvider(params: {
   provider: LlmProvider
   apiKey: string
+  model?: string
   pumpImage: Blob
   odometerImage: Blob
 }) {
   if (params.provider === 'anthropic') {
     return extractFromImagesAnthropic({
       apiKey: params.apiKey,
+      model: params.model,
       pumpImage: params.pumpImage,
       odometerImage: params.odometerImage,
     })
   }
   return extractFromImagesGemini({
     apiKey: params.apiKey,
+    model: params.model,
     pumpImage: params.pumpImage,
     odometerImage: params.odometerImage,
   })
@@ -39,6 +42,7 @@ export async function extractFromImagesWithFallback(params: {
       return await extractFromImagesViaProvider({
         provider: p.provider,
         apiKey: p.apiKey,
+        model: p.model,
         pumpImage: params.pumpImage,
         odometerImage: params.odometerImage,
       })
@@ -65,6 +69,7 @@ export async function extractServiceFromDocumentWithFallback(params: {
       if (p.provider === 'anthropic') {
         const extracted = await extractServiceFromDocumentAnthropic({
           apiKey: p.apiKey,
+          model: p.model,
           images: params.images,
           documentText: params.documentText,
           vehicles: params.vehicles,
@@ -76,6 +81,7 @@ export async function extractServiceFromDocumentWithFallback(params: {
       }
       const extracted = await extractServiceFromDocument({
         apiKey: p.apiKey,
+        model: p.model,
         images: params.images,
         documentText: params.documentText,
         vehicles: params.vehicles,

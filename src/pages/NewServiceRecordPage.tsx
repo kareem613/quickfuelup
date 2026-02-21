@@ -119,15 +119,10 @@ export default function NewServiceRecordPage() {
       .map((p) => ({
         provider: p,
         apiKey: p === 'anthropic' ? (cfg?.llm.anthropicApiKey ?? '') : (cfg?.llm.geminiApiKey ?? ''),
+        model: p === 'anthropic' ? cfg?.llm.anthropicModelService : cfg?.llm.geminiModelService,
       }))
       .filter((p) => p.apiKey.trim())
   }, [cfg])
-
-  // Service extraction: prefer Gemini only when configured (better consistency + user preference).
-  const serviceProviders = useMemo(() => {
-    const gemini = providersWithKeys.find((p) => p.provider === 'gemini')
-    return gemini ? [gemini] : providersWithKeys
-  }, [providersWithKeys])
 
   const extraFieldNamesByRecordType = useMemo(() => {
     const out: Record<string, string[]> = {}
@@ -266,7 +261,7 @@ export default function NewServiceRecordPage() {
     if (!cfg) return
     if (!draft.document) return
     if (!draft.vehicleId) return
-    if (serviceProviders.length === 0) return
+    if (providersWithKeys.length === 0) return
     const forced = forceExtractTick !== lastForceExtractTickRef.current
     if (docBusy || extractBusy || submitBusy) return
     if (!forced && draft.records?.length) return
@@ -285,7 +280,7 @@ export default function NewServiceRecordPage() {
 
       try {
         const extracted = await extractServiceFromDocumentWithFallback({
-          providers: serviceProviders,
+          providers: providersWithKeys,
           images: draft.documentImages?.slice(0, 3),
           documentText: draft.documentText,
           vehicles,
@@ -347,7 +342,7 @@ export default function NewServiceRecordPage() {
     extractBusy,
     extraFieldNamesByRecordType,
     forceExtractTick,
-    serviceProviders,
+    providersWithKeys,
     submitBusy,
     vehicles,
   ])

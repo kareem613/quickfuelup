@@ -9,6 +9,11 @@ export type AppConfig = {
     providerOrder: LlmProvider[]
     geminiApiKey?: string
     anthropicApiKey?: string
+    // Optional per-feature model overrides (blank/undefined = provider defaults).
+    geminiModelFuel?: string
+    geminiModelService?: string
+    anthropicModelFuel?: string
+    anthropicModelService?: string
   }
 }
 
