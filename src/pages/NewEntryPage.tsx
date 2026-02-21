@@ -477,11 +477,7 @@ export default function NewEntryPage() {
                 <>
                   <img src={pumpUrl} alt="Pump preview" />
                 </>
-              ) : (
-                <div className="image-placeholder">
-                  <div>{draft.pumpImage ? 'Replace pump photo' : 'Add pump photo'}</div>
-                </div>
-              )}
+              ) : null}
               <div className="image-split-overlay" aria-hidden="true">
                 <button
                   className="image-split-btn"
@@ -520,11 +516,7 @@ export default function NewEntryPage() {
               onChange={(e) => onFileChange('pumpImage', e.target.files?.[0] ?? null)}
               disabled={!step1Done || submitBusy}
             />
-            <div className="muted">
-              {draft.pumpImage
-                ? `Selected: ${draft.pumpImage.type || 'image'} (${Math.round(draft.pumpImage.size / 1024)} KB)`
-                : ''}
-            </div>
+            <div className="muted">{draft.pumpImage ? 'Selected' : ''}</div>
           </>
         )}
       </div>
@@ -565,7 +557,6 @@ export default function NewEntryPage() {
                       strokeLinecap="round"
                     />
                   </svg>
-                  <div>{draft.odometerImage ? 'Replace odometer photo' : 'Add odometer photo'}</div>
                 </div>
               )}
               <div className="image-split-overlay" aria-hidden="true">
@@ -606,11 +597,7 @@ export default function NewEntryPage() {
               onChange={(e) => onFileChange('odometerImage', e.target.files?.[0] ?? null)}
               disabled={!step1Done || !step2Done || submitBusy}
             />
-            <div className="muted">
-              {draft.odometerImage
-                ? `Selected: ${draft.odometerImage.type || 'image'} (${Math.round(draft.odometerImage.size / 1024)} KB)`
-                : ''}
-            </div>
+            <div className="muted">{draft.odometerImage ? 'Selected' : ''}</div>
           </>
         )}
       </div>
