@@ -80,6 +80,23 @@ textarea {
   backdrop-filter: blur(10px);
 }
 
+.top-nav-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  text-decoration: none;
+  white-space: nowrap;
+  opacity: 0.92;
+}
+
+.top-nav-brand-text {
+  font-size: 0.85rem;
+  line-height: 1;
+  letter-spacing: 0.1px;
+}
+
 .top-nav-item {
   flex: 1 1 0;
   min-width: 0;

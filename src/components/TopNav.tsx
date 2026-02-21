@@ -70,6 +70,10 @@ export default function TopNav() {
 
   return (
     <nav className="top-nav" aria-label="Main menu">
+      <Link to="/new" className="top-nav-brand" aria-label="QuickFillUp home">
+        <img src="/icons/ios/32.png" alt="" width={22} height={22} style={{ borderRadius: 6 }} />
+        <span className="top-nav-brand-text">QuickFillUp</span>
+      </Link>
       <Link to="/new" className={`top-nav-item${active('/new')}`} aria-label="Fuel">
         <span className="top-nav-icon">
           <PumpIcon />
@@ -91,4 +95,3 @@ export default function TopNav() {
     </nav>
   )
 }
-
