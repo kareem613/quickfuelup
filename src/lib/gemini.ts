@@ -25,8 +25,8 @@ export async function extractFromImages(params: {
   ] as const
 
   const prompt = `
-You will be given two photos:
-1) a gas pump display showing total cost and quantity/volume
+ You will be given two photos:
+1) a gas pump display OR a fuel receipt showing total cost and quantity/volume
 2) a vehicle odometer display
 
 Extract these fields and return JSON ONLY matching this TypeScript type:

@@ -525,7 +525,7 @@ export default function NewEntryPage() {
             setCard2Open((v) => !v)
           }}
         >
-          <strong>2) Pump photo</strong>
+          <strong>2) Pump / receipt photo</strong>
           {step2Done ? <DoneIcon /> : <span className="muted">Required</span>}
         </button>
         {step2Done && !card2Open ? null : (
