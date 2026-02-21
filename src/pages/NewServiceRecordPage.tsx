@@ -619,7 +619,7 @@ export default function NewServiceRecordPage() {
                   <div>Files</div>
                 </button>
               </div>
-              {!previewUrl ? <div className="image-placeholder">Select invoice</div> : null}
+              {!previewUrl ? <div className="image-placeholder" aria-hidden="true" /> : null}
             </div>
             <input
               ref={docCameraInputRef}
