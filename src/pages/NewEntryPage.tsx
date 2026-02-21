@@ -87,6 +87,12 @@ export default function NewEntryPage() {
   const lastExtractSigRef = useRef<string>('')
   const [successOpen, setSuccessOpen] = useState(false)
 
+  const [photoPickerKey, setPhotoPickerKey] = useState<null | 'pumpImage' | 'odometerImage'>(null)
+  const pumpCameraInputRef = useRef<HTMLInputElement | null>(null)
+  const pumpGalleryInputRef = useRef<HTMLInputElement | null>(null)
+  const odoCameraInputRef = useRef<HTMLInputElement | null>(null)
+  const odoGalleryInputRef = useRef<HTMLInputElement | null>(null)
+
   const [card1Open, setCard1Open] = useState(true)
   const [card2Open, setCard2Open] = useState(true)
   const [card3Open, setCard3Open] = useState(true)
@@ -166,6 +172,25 @@ export default function NewEntryPage() {
     } finally {
       setImageBusy(false)
     }
+  }
+
+  function openPhotoPicker(key: 'pumpImage' | 'odometerImage') {
+    setPhotoPickerKey(key)
+  }
+
+  function clickPhotoPicker(mode: 'camera' | 'gallery') {
+    const key = photoPickerKey
+    if (!key) return
+    const ref =
+      key === 'pumpImage'
+        ? mode === 'camera'
+          ? pumpCameraInputRef
+          : pumpGalleryInputRef
+        : mode === 'camera'
+          ? odoCameraInputRef
+          : odoGalleryInputRef
+    setPhotoPickerKey(null)
+    ref.current?.click()
   }
 
   const canExtract = Boolean(draft.vehicleId && draft.pumpImage && draft.odometerImage)
@@ -439,9 +464,13 @@ export default function NewEntryPage() {
         </button>
         {step2Done && !card2Open ? null : (
           <>
-            <label
+            <button
               className={`image-preview clickable${!step1Done || submitBusy ? ' disabled' : ''}`}
+              style={{ padding: 0 }}
               aria-disabled={!step1Done || submitBusy}
+              disabled={!step1Done || submitBusy}
+              type="button"
+              onClick={() => openPhotoPicker('pumpImage')}
             >
               {pumpUrl ? (
                 <>
@@ -462,15 +491,24 @@ export default function NewEntryPage() {
                   <div>{draft.pumpImage ? 'Replace pump photo' : 'Tap to choose pump photo'}</div>
                 </div>
               )}
-              <input
-                className="sr-only"
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={(e) => onFileChange('pumpImage', e.target.files?.[0] ?? null)}
-                disabled={!step1Done || submitBusy}
-              />
-            </label>
+            </button>
+            <input
+              ref={pumpCameraInputRef}
+              className="sr-only"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={(e) => onFileChange('pumpImage', e.target.files?.[0] ?? null)}
+              disabled={!step1Done || submitBusy}
+            />
+            <input
+              ref={pumpGalleryInputRef}
+              className="sr-only"
+              type="file"
+              accept="image/*"
+              onChange={(e) => onFileChange('pumpImage', e.target.files?.[0] ?? null)}
+              disabled={!step1Done || submitBusy}
+            />
             <div className="muted">
               {draft.pumpImage
                 ? `Selected: ${draft.pumpImage.type || 'image'} (${Math.round(draft.pumpImage.size / 1024)} KB)`
@@ -495,9 +533,13 @@ export default function NewEntryPage() {
         </button>
         {step3Done && !card3Open ? null : (
           <>
-            <label
+            <button
               className={`image-preview clickable${!step1Done || !step2Done || submitBusy ? ' disabled' : ''}`}
+              style={{ padding: 0 }}
               aria-disabled={!step1Done || !step2Done || submitBusy}
+              disabled={!step1Done || !step2Done || submitBusy}
+              type="button"
+              onClick={() => openPhotoPicker('odometerImage')}
             >
               {odoUrl ? (
                 <>
@@ -523,15 +565,24 @@ export default function NewEntryPage() {
                   <div>{draft.odometerImage ? 'Replace odometer photo' : 'Tap to choose odometer photo'}</div>
                 </div>
               )}
-              <input
-                className="sr-only"
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={(e) => onFileChange('odometerImage', e.target.files?.[0] ?? null)}
-                disabled={!step1Done || !step2Done || submitBusy}
-              />
-            </label>
+            </button>
+            <input
+              ref={odoCameraInputRef}
+              className="sr-only"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={(e) => onFileChange('odometerImage', e.target.files?.[0] ?? null)}
+              disabled={!step1Done || !step2Done || submitBusy}
+            />
+            <input
+              ref={odoGalleryInputRef}
+              className="sr-only"
+              type="file"
+              accept="image/*"
+              onChange={(e) => onFileChange('odometerImage', e.target.files?.[0] ?? null)}
+              disabled={!step1Done || !step2Done || submitBusy}
+            />
             <div className="muted">
               {draft.odometerImage
                 ? `Selected: ${draft.odometerImage.type || 'image'} (${Math.round(draft.odometerImage.size / 1024)} KB)`
@@ -696,6 +747,26 @@ export default function NewEntryPage() {
 
       {imageBusy || extractBusy ? (
         <div className="muted">{imageBusy ? 'Processing images…' : 'Extracting from photos…'}</div>
+      ) : null}
+
+      {photoPickerKey ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Choose photo source" onClick={() => setPhotoPickerKey(null)}>
+          <div className="modal card stack" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: 0 }}>Add photo</h3>
+            <div className="muted">Choose how you want to add the photo.</div>
+            <div className="actions">
+              <button className="btn" type="button" onClick={() => clickPhotoPicker('camera')}>
+                Take photo
+              </button>
+              <button className="btn" type="button" onClick={() => clickPhotoPicker('gallery')}>
+                Choose existing
+              </button>
+            </div>
+            <button className="btn" type="button" onClick={() => setPhotoPickerKey(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
       ) : null}
     </div>
   )
