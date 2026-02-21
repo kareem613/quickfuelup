@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { loadConfig } from '../lib/config'
 import { toMMDDYYYY, todayISODate } from '../lib/date'
 import { clearDraft, loadDraft, saveDraft } from '../lib/draft'
@@ -97,7 +97,24 @@ function FileIcon() {
   )
 }
 
+function withTimeout<T>(p: Promise<T>, ms: number, label: string) {
+  return new Promise<T>((resolve, reject) => {
+    const t = window.setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms)
+    p.then(
+      (v) => {
+        window.clearTimeout(t)
+        resolve(v)
+      },
+      (e) => {
+        window.clearTimeout(t)
+        reject(e)
+      },
+    )
+  })
+}
+
 export default function NewEntryPage() {
+  const navigate = useNavigate()
   // Avoid re-loading config object every render (prevents effect loops).
   const cfg = useMemo(() => loadConfig(), [])
 
@@ -105,6 +122,8 @@ export default function NewEntryPage() {
   const [draft, setDraft] = useState<Draft>({ date: todayISODate() })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [vehiclesLoadProblem, setVehiclesLoadProblem] = useState<string | null>(null)
+  const [reloadVehiclesTick, setReloadVehiclesTick] = useState(0)
   const [imageBusy, setImageBusy] = useState(false)
   const [extractBusy, setExtractBusy] = useState(false)
   const [submitBusy, setSubmitBusy] = useState(false)
@@ -153,8 +172,10 @@ export default function NewEntryPage() {
       if (!cfg) return
       setBusy(true)
       setError(null)
+      setVehiclesLoadProblem(null)
       try {
-        const [existingDraft, v] = await Promise.all([loadDraft(), getVehicles(cfg)])
+        const v = await withTimeout(getVehicles(cfg), 6000, 'Loading vehicles')
+        const existingDraft = await loadDraft()
         setVehicles(v)
         const initial =
           existingDraft ?? {
@@ -165,12 +186,18 @@ export default function NewEntryPage() {
         const vehicleId = initial.vehicleId ?? (v.length === 1 ? v[0]?.id : undefined)
         setDraft({ ...initial, vehicleId })
       } catch (e) {
-        setError(String(e))
+        const isOffline = navigator.onLine === false
+        const details = e instanceof Error ? e.message : String(e)
+        setVehiclesLoadProblem(
+          isOffline
+            ? 'You appear to be offline. Connect to the internet and try again.'
+            : `Could not reach your LubeLogger server. Check your connection and try again.\n\nDetails: ${details}`,
+        )
       } finally {
         setBusy(false)
       }
     })()
-  }, [cfg])
+  }, [cfg, reloadVehiclesTick])
 
   useEffect(() => {
     // Persist the draft (including images) to enable retries across reloads.
@@ -386,6 +413,37 @@ export default function NewEntryPage() {
       </div>
 
       {error && <div className="error">{error}</div>}
+      {vehiclesLoadProblem ? (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Connectivity problem"
+          onClick={() => setVehiclesLoadProblem(null)}
+        >
+          <div className="modal card stack" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: 0 }}>Can’t load vehicles</h3>
+            <div className="muted" style={{ whiteSpace: 'pre-wrap' }}>
+              {vehiclesLoadProblem}
+            </div>
+            <div className="actions">
+              <button
+                className="btn primary"
+                type="button"
+                onClick={() => {
+                  setVehiclesLoadProblem(null)
+                  setReloadVehiclesTick((n) => n + 1)
+                }}
+              >
+                Retry
+              </button>
+              <button className="btn" type="button" onClick={() => navigate('/settings')}>
+                Go to Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {successOpen ? (
         <div
           className="modal-overlay"
