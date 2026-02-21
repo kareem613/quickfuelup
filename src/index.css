@@ -41,6 +41,10 @@ body {
   max-width: 520px;
 }
 
+.modal .card {
+  background: #0b1220;
+}
+
 a {
   color: inherit;
 }

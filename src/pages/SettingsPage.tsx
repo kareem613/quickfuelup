@@ -638,6 +638,10 @@ export default function SettingsPage() {
                 <div className="muted">Sharing requires a modern browser with WebCrypto support.</div>
               ) : (
                 <>
+                  <div className="muted">
+                    Warning: This shares your LubeLogger API key. Anyone you share this with can create/edit records via the
+                    API (editor-level access). It does not give them your LubeLogger login.
+                  </div>
                   <div className="muted">Use a long passcode; anyone with the link can attempt offline guessing.</div>
                   <div className="field">
                     <label>Passcode</label>
