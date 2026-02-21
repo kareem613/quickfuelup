@@ -1,4 +1,5 @@
 import { ExtractionSchema, parseJsonFromText } from './extraction'
+import { ServiceExtractionSchema } from './serviceExtraction'
 
 async function blobToBase64(blob: Blob): Promise<string> {
   const arrayBuffer = await blob.arrayBuffer()
@@ -102,3 +103,108 @@ Rules:
   if (!parsed.success) throw new Error(`Anthropic response did not match schema: ${joined}`)
   return { ...parsed.data, rawJson: json }
 }
+
+export async function extractServiceFromDocumentAnthropic(params: {
+  apiKey: string
+  images?: Blob[]
+  documentText?: string
+  vehicles: { id: number; name: string }[]
+  extraFieldNamesByRecordType?: Record<string, string[]>
+}) {
+  const vehiclesText = params.vehicles.map((v) => `- ${v.id}: ${v.name}`).join('\n')
+  const extraFieldsText = params.extraFieldNamesByRecordType
+    ? Object.entries(params.extraFieldNamesByRecordType)
+        .map(([k, names]) => `- ${k}: ${names.length ? names.join(', ') : '(none configured)'}`)
+        .join('\n')
+    : '(not provided)'
+
+  const prompt = `
+You will be given a vehicle service invoice/receipt as text and/or images.
+
+Return JSON ONLY matching this TypeScript type:
+{
+  "recordType": "service" | "repair" | "upgrade" | null,
+  "vehicleId": number | null,
+  "date": string | null,          // yyyy-mm-dd (preferred). If unknown, null.
+  "odometer": number | null,      // integer miles/km
+  "description": string | null,   // short description of work performed
+  "totalCost": number | null,     // total paid/total due (prefer final total)
+  "notes"?: string | null,
+  "tags"?: string | null,         // space-separated tags if obvious, else null/omit
+  "extraFields"?: { "name": string, "value": string }[] | null,
+  "explanation"?: string | null
+}
+
+Available vehicles (pick one vehicleId if confident; otherwise null):
+${vehiclesText}
+
+Configured LubeLogger extra fields by record type (prefer these names if they match):
+${extraFieldsText}
+
+Document text (may be empty for scanned PDFs):
+${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(none)'}
+
+Rules:
+- Return only valid JSON (no markdown, no backticks).
+- Use '.' as decimal separator.
+- If you choose a recordType, choose the one that best matches the work (service=scheduled maintenance, repair=unplanned fix, upgrade=enhancement).
+- If you cannot determine a value, set it to null and briefly explain why in explanation.
+`.trim()
+
+  const imageBlobs = (params.images ?? []).slice(0, 3)
+  const imageB64s = await Promise.all(imageBlobs.map((b) => blobToBase64(b)))
+
+  const content: unknown[] = [{ type: 'text', text: prompt }]
+  for (let i = 0; i < imageB64s.length; i++) {
+    content.push({
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: imageBlobs[i]?.type || 'image/jpeg',
+        data: imageB64s[i]!,
+      },
+    })
+  }
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+      'x-api-key': params.apiKey,
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5',
+      max_tokens: 500,
+      messages: [{ role: 'user', content }],
+    }),
+  })
+
+  const text = (await res.text()).trim()
+  if (!res.ok) throw new Error(`Anthropic HTTP ${res.status}: ${text}`)
+
+  const data = JSON.parse(text) as unknown
+  const bodyContent =
+    typeof data === 'object' && data !== null && Array.isArray((data as Record<string, unknown>).content)
+      ? ((data as Record<string, unknown>).content as unknown[])
+      : []
+  const joined = bodyContent
+    .map((c) => {
+      if (typeof c !== 'object' || c === null) return null
+      const obj = c as Record<string, unknown>
+      if (obj.type !== 'text') return null
+      return typeof obj.text === 'string' ? obj.text : null
+    })
+    .filter((t): t is string => Boolean(t))
+    .join('\n')
+    .trim()
+
+  if (!joined) throw new Error(`Anthropic did not return text: ${text}`)
+
+  const json = parseJsonFromText(joined, 'Anthropic did not return JSON')
+  const parsed = ServiceExtractionSchema.safeParse(json)
+  if (!parsed.success) throw new Error(`Anthropic response did not match schema: ${joined}`)
+  return { ...parsed.data, rawJson: json }
+}
+

@@ -407,9 +407,17 @@ export default function NewEntryPage() {
           <img src="/icons/ios/32.png" alt="" width={24} height={24} style={{ borderRadius: 6 }} />
           <h2 style={{ margin: 0 }}>QuickFillUp</h2>
         </div>
-        <Link to="/settings" className="muted">
-          Settings
-        </Link>
+        <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
+          <Link to="/new" className="btn small primary">
+            Fuel
+          </Link>
+          <Link to="/service" className="btn small">
+            Service
+          </Link>
+          <Link to="/settings" className="muted">
+            Settings
+          </Link>
+        </div>
       </div>
 
       {error && <div className="error">{error}</div>}

@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { ExtractionSchema, parseJsonFromText } from './extraction'
+import { ServiceExtractionSchema } from './serviceExtraction'
 
 async function blobToBase64(blob: Blob): Promise<string> {
   const arrayBuffer = await blob.arrayBuffer()
@@ -81,3 +82,97 @@ Rules:
 
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr))
 }
+
+export async function extractServiceFromDocument(params: {
+  apiKey: string
+  images?: Blob[]
+  documentText?: string
+  vehicles: { id: number; name: string }[]
+  extraFieldNamesByRecordType?: Record<string, string[]>
+}) {
+  const genAI = new GoogleGenerativeAI(params.apiKey)
+  const modelNames = [
+    'gemini-2.0-flash',
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-pro-latest',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+  ] as const
+
+  const vehiclesText = params.vehicles.map((v) => `- ${v.id}: ${v.name}`).join('\n')
+  const extraFieldsText = params.extraFieldNamesByRecordType
+    ? Object.entries(params.extraFieldNamesByRecordType)
+        .map(([k, names]) => `- ${k}: ${names.length ? names.join(', ') : '(none configured)'}`)
+        .join('\n')
+    : '(not provided)'
+
+  const prompt = `
+You will be given a vehicle service invoice/receipt as text and/or images.
+
+Return JSON ONLY matching this TypeScript type:
+{
+  "recordType": "service" | "repair" | "upgrade" | null,
+  "vehicleId": number | null,
+  "date": string | null,          // yyyy-mm-dd (preferred). If unknown, null.
+  "odometer": number | null,      // integer miles/km
+  "description": string | null,   // short description of work performed
+  "totalCost": number | null,     // total paid/total due (prefer final total)
+  "notes"?: string | null,
+  "tags"?: string | null,         // space-separated tags if obvious, else null/omit
+  "extraFields"?: { "name": string, "value": string }[] | null,
+  "explanation"?: string | null
+}
+
+Available vehicles (pick one vehicleId if confident; otherwise null):
+${vehiclesText}
+
+Configured LubeLogger extra fields by record type (prefer these names if they match):
+${extraFieldsText}
+
+Document text (may be empty for scanned PDFs):
+${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(none)'}
+
+Rules:
+- Return only valid JSON (no markdown, no backticks).
+- Use '.' as decimal separator.
+- If you choose a recordType, choose the one that best matches the work (service=scheduled maintenance, repair=unplanned fix, upgrade=enhancement).
+- If you cannot determine a value, set it to null and briefly explain why in explanation.
+`.trim()
+
+  const imageBlobs = (params.images ?? []).slice(0, 3)
+  const imageB64s = await Promise.all(imageBlobs.map((b) => blobToBase64(b)))
+
+  let lastErr: unknown
+  for (const name of modelNames) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: name,
+        generationConfig: { responseMimeType: 'application/json' },
+      })
+
+      const parts: unknown[] = [{ text: prompt }]
+      for (let i = 0; i < imageB64s.length; i++) {
+        parts.push({
+          inlineData: { data: imageB64s[i]!, mimeType: imageBlobs[i]?.type || 'image/jpeg' },
+        })
+      }
+
+      const result = await model.generateContent(parts as never)
+      const text = result.response.text().trim()
+      const json = parseJsonFromText(text, 'Gemini did not return JSON')
+      const parsed = ServiceExtractionSchema.safeParse(json)
+      if (!parsed.success) throw new Error(`Gemini response did not match schema: ${text}`)
+      return { ...parsed.data, rawJson: json }
+    } catch (e) {
+      const msg = String(e)
+      if (msg.includes('404') && (msg.includes('not found') || msg.includes('not supported'))) {
+        lastErr = e
+        continue
+      }
+      throw e
+    }
+  }
+
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr))
+}
+

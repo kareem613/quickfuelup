@@ -57,6 +57,15 @@ export default function HowItWorksPage(props: { onDismiss?: () => void }) {
             </ol>
           </div>
 
+          <div>
+            <strong>Logging a service/repair/upgrade record</strong>
+            <ol style={{ margin: '8px 0 0 18px' }}>
+              <li>Select your vehicle.</li>
+              <li>Select an invoice/receipt file (PDF or image).</li>
+              <li>Confirm the extracted values (including extra fields), then submit.</li>
+            </ol>
+          </div>
+
           <div className="muted">
             Tip: If submission fails, your photos stay saved until it succeeds — so you can retry without taking them
             again.
@@ -64,7 +73,8 @@ export default function HowItWorksPage(props: { onDismiss?: () => void }) {
 
           <div className="muted">
             Privacy: Nothing is sent anywhere except (1) to the AI provider you configured, using your own AI key, when
-            you run extraction, and (2) to your own LubeLogger instance, using your own API key, when you submit.
+            you run extraction, and (2) to your own LubeLogger instance, using your own API key, when you submit
+            (including uploading the invoice as an attachment).
           </div>
         </div>
 

@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { isHowItWorksDismissed } from './lib/howItWorks'
 import HowItWorksPage from './pages/HowItWorksPage'
 import NewEntryPage from './pages/NewEntryPage'
+import NewServiceRecordPage from './pages/NewServiceRecordPage'
 import ReviewPage from './pages/ReviewPage'
 import SettingsPage from './pages/SettingsPage'
 
@@ -24,6 +25,7 @@ export default function App() {
       <Routes>
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/new" element={<NewEntryPage />} />
+        <Route path="/service" element={<NewServiceRecordPage />} />
         <Route path="/review" element={<ReviewPage />} />
         <Route path="/how-it-works" element={<HowItWorksPage onDismiss={() => setHowItWorksDismissed(true)} />} />
         <Route path="/" element={<Navigate to="/new" replace />} />
