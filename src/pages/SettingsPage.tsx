@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import TopNav from '../components/TopNav'
 import { loadConfig, saveConfig } from '../lib/config'
 import type { AppConfig, LlmProvider } from '../lib/types'
 import { getDeferredPrompt, isPwaInstallEnabled, isRunningStandalone, setDeferredPrompt, setPwaInstallEnabled } from '../lib/pwaInstall'
@@ -407,15 +408,8 @@ export default function SettingsPage() {
 
   return (
     <div className="container stack">
-      <div className="row">
-        <div className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
-          <img src="/icons/ios/32.png" alt="" width={24} height={24} style={{ borderRadius: 6 }} />
-          <h2 style={{ margin: 0 }}>Settings</h2>
-        </div>
-        <Link to="/new" className="muted">
-          Back
-        </Link>
-      </div>
+      <TopNav />
+      <h2 style={{ margin: 0 }}>Settings</h2>
 
       <div className="card stack">
         <div className="field">

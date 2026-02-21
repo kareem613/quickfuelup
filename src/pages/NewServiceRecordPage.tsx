@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import TopNav from '../components/TopNav'
 import { loadConfig } from '../lib/config'
 import { todayISODate, toMMDDYYYY } from '../lib/date'
 import { clearServiceDraft, loadServiceDraft, saveServiceDraft } from '../lib/serviceDraft'
@@ -470,7 +471,7 @@ export default function NewServiceRecordPage() {
   if (!cfg) {
     return (
       <div className="container stack">
-        <h2 style={{ margin: 0 }}>QuickFillUp</h2>
+        <TopNav />
         <div className="card stack">
           <div>Setup required.</div>
           <Link className="btn primary" to="/settings">
@@ -483,23 +484,7 @@ export default function NewServiceRecordPage() {
 
   return (
     <div className="container stack">
-      <div className="row">
-        <div className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
-          <img src="/icons/ios/32.png" alt="" width={24} height={24} style={{ borderRadius: 6 }} />
-          <h2 style={{ margin: 0 }}>QuickFillUp</h2>
-        </div>
-        <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
-          <Link to="/new" className="btn small">
-            Fuel
-          </Link>
-          <Link to="/service" className="btn small primary">
-            Service
-          </Link>
-          <Link to="/settings" className="muted">
-            Settings
-          </Link>
-        </div>
-      </div>
+      <TopNav />
 
       {error && <div className="error">{error}</div>}
       {vehiclesLoadProblem ? (

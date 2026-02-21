@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import TopNav from '../components/TopNav'
 import { dismissHowItWorks } from '../lib/howItWorks'
 
 export default function HowItWorksPage(props: { onDismiss?: () => void }) {
@@ -14,12 +15,7 @@ export default function HowItWorksPage(props: { onDismiss?: () => void }) {
 
   return (
     <div className="container stack">
-      <div className="row">
-        <div className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
-          <img src="/icons/ios/32.png" alt="" width={24} height={24} style={{ borderRadius: 6 }} />
-          <h2 style={{ margin: 0 }}>QuickFillUp</h2>
-        </div>
-      </div>
+      <TopNav />
 
       <div className="card stack">
         <h3 style={{ margin: 0 }}>Welcome 👋</h3>
