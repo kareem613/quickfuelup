@@ -590,7 +590,10 @@ export default function NewServiceRecordPage() {
         )}
       </div>
 
-      <div className={`card stack${step2Done && !card2Open ? ' collapsed' : ''}`} style={{ opacity: step1Done ? 1 : 0.6 }}>
+      <div
+        className={`card stack${extractBusy ? ' extracting' : ''}${step2Done && !card2Open ? ' collapsed' : ''}`}
+        style={{ opacity: step1Done ? 1 : 0.6 }}
+      >
         <button
           className="row card-header-btn"
           type="button"
@@ -695,15 +698,13 @@ export default function NewServiceRecordPage() {
         )}
       </div>
 
-      <div className={`card stack${extractBusy ? ' extracting' : ''}`} style={{ opacity: step1Done && step2Done ? 1 : 0.6 }}>
+      <div className={`card stack`} style={{ opacity: step1Done && step2Done ? 1 : 0.6 }}>
         <div className="row">
           <strong>4) Review</strong>
         </div>
 
         {!hasRecords ? (
-          <div className="muted">
-            {extractBusy ? 'Extracting records. This can take a minute.' : step2Done ? 'No extracted records yet.' : 'Extract to generate records.'}
-          </div>
+          <div className="muted">No records have been extracted.</div>
         ) : null}
 
         {(draft.records ?? []).map((r, idx) => {
