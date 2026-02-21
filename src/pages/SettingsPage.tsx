@@ -26,6 +26,16 @@ function formatError(e: unknown) {
   return `error: ${safeStringify(e)}`
 }
 
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, ms: number) {
+  const controller = new AbortController()
+  const t = window.setTimeout(() => controller.abort(), ms)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } finally {
+    window.clearTimeout(t)
+  }
+}
+
 export default function SettingsPage() {
   const navigate = useNavigate()
   const existing = useMemo(() => loadConfig(), [])
@@ -96,7 +106,7 @@ export default function SettingsPage() {
     if (cfg.cultureInvariant) headers['culture-invariant'] = '1'
 
     try {
-      const res = await fetch(url, { headers })
+      const res = await fetchWithTimeout(url, { headers }, 6000)
       const text = await res.text()
 
       const bodyLength = text.length
