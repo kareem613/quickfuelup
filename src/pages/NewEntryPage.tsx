@@ -466,6 +466,7 @@ export default function NewEntryPage() {
                 className="sr-only"
                 type="file"
                 accept="image/*"
+                capture="environment"
                 onChange={(e) => onFileChange('pumpImage', e.target.files?.[0] ?? null)}
                 disabled={!step1Done || submitBusy}
               />
@@ -526,6 +527,7 @@ export default function NewEntryPage() {
                 className="sr-only"
                 type="file"
                 accept="image/*"
+                capture="environment"
                 onChange={(e) => onFileChange('odometerImage', e.target.files?.[0] ?? null)}
                 disabled={!step1Done || !step2Done || submitBusy}
               />
