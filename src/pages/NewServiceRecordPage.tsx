@@ -110,8 +110,10 @@ export default function NewServiceRecordPage() {
 
   const [card1Open, setCard1Open] = useState(true)
   const [card2Open, setCard2Open] = useState(true)
+  const [card3Open, setCard3Open] = useState(true)
   const card1Touched = useRef(false)
   const card2Touched = useRef(false)
+  const card3Touched = useRef(false)
 
   const providersWithKeys = useMemo(() => {
     const orderedProviders = cfg?.llm.providerOrder?.length ? cfg.llm.providerOrder : (['gemini', 'anthropic'] as const)
@@ -230,7 +232,11 @@ export default function NewServiceRecordPage() {
   }
 
   const step1Done = Boolean(draft.document && (draft.documentImages?.length || draft.documentText))
-  const step2Done = Boolean(draft.vehicleId)
+  const hasRecords = Boolean(draft.records?.length)
+  const step2Done = Boolean(draft.extracted || extractFailed || hasRecords)
+  const step3Done = Boolean(
+    (draft.records?.length ? draft.records.every((r) => typeof r.form.vehicleId === 'number') : false) || draft.vehicleId,
+  )
 
   useEffect(() => {
     if (!step1Done) {
@@ -242,13 +248,24 @@ export default function NewServiceRecordPage() {
   }, [step1Done])
 
   useEffect(() => {
-    // Step 2 is optional; keep it open by default, but allow the user to collapse it even if incomplete.
-    if (step2Done && !card2Touched.current) setCard2Open(false)
-    if (!step2Done && !card2Touched.current) setCard2Open(true)
+    if (!step2Done) {
+      setCard2Open(true)
+      card2Touched.current = false
+      return
+    }
+    if (!card2Touched.current) setCard2Open(false)
   }, [step2Done])
 
+  useEffect(() => {
+    if (!step3Done) {
+      setCard3Open(true)
+      card3Touched.current = false
+      return
+    }
+    if (!card3Touched.current) setCard3Open(false)
+  }, [step3Done])
+
   const canExtractAny = Boolean(cfg && draft.document && providersWithKeys.length && (draft.documentImages?.length || draft.documentText))
-  const hasRecords = Boolean(draft.records?.length)
 
   function updateRecord(id: string, fn: (r: ServiceDraftRecord) => ServiceDraftRecord) {
     setDraft((d) => ({
@@ -578,16 +595,75 @@ export default function NewServiceRecordPage() {
           className="row card-header-btn"
           type="button"
           onClick={() => {
+            if (!step1Done) return
+            if (!step2Done) return
             card2Touched.current = true
             setCard2Open((v) => !v)
           }}
         >
-          <strong>2) Vehicle</strong>
-          {step2Done ? <DoneIcon /> : <span className="muted">Optional</span>}
+          <strong>2) Extract</strong>
+          {step2Done ? <DoneIcon /> : <span className="muted">Required</span>}
         </button>
 
         {step2Done && !card2Open ? null : !step1Done ? (
-          <div className="muted">Upload an invoice first to enable auto-selection.</div>
+          <div className="muted">Upload an invoice to start extraction.</div>
+        ) : (
+          <>
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <div className="muted">{extractBusy ? 'Extracting records. This can take a minute.' : step2Done ? 'Done.' : 'Starting…'}</div>
+              <button
+                className="btn small"
+                disabled={!canExtractAny || extractBusy || submitBusy}
+                onClick={() => {
+                  setExtractFailed(false)
+                  setExtractMessage(null)
+                  lastExtractSigRef.current = ''
+                  setForceExtractTick((n) => n + 1)
+                  setDraft((d) => ({ ...d, extracted: undefined, records: undefined }))
+                }}
+                type="button"
+                aria-label="Retry extraction"
+                title="Retry"
+              >
+                <RefreshIcon />
+              </button>
+            </div>
+
+            {extractFailed ? (
+              <div className="error">
+                <div>Failed to extract values. Enter manually or try again.</div>
+                {extractMessage ? (
+                  <div className="muted" style={{ marginTop: 6, whiteSpace: 'pre-wrap' }}>
+                    {extractMessage.length > 800 ? `${extractMessage.slice(0, 800)}…` : extractMessage}
+                  </div>
+                ) : null}
+              </div>
+            ) : extractMessage ? (
+              <div className="muted" style={{ whiteSpace: 'pre-wrap' }}>
+                {extractMessage.length > 500 ? `${extractMessage.slice(0, 500)}…` : extractMessage}
+              </div>
+            ) : null}
+          </>
+        )}
+      </div>
+
+      <div className={`card stack${step3Done && !card3Open ? ' collapsed' : ''}`} style={{ opacity: step1Done ? 1 : 0.6 }}>
+        <button
+          className="row card-header-btn"
+          type="button"
+          onClick={() => {
+            if (!step1Done) return
+            if (!step2Done) return
+            card3Touched.current = true
+            setCard3Open((v) => !v)
+          }}
+        >
+          <strong>3) Vehicle</strong>
+          {step3Done ? <DoneIcon /> : <span className="muted">Required</span>}
+        </button>
+
+        {step3Done && !card3Open ? null : !step2Done ? (
+          <div className="muted">Extract first to auto-select a vehicle (if possible).</div>
         ) : busy ? (
           <div className="muted">Loading vehicles…</div>
         ) : (
@@ -600,18 +676,15 @@ export default function NewServiceRecordPage() {
                   className={`vehicle-card${selected ? ' selected' : ''}`}
                   onClick={() => {
                     vehicleTouched.current = true
-                    setExtractFailed(false)
-                    setExtractMessage(null)
                     setDraft((d) => ({
                       ...d,
                       vehicleId: v.id,
-                      extracted: undefined,
                       records: (d.records ?? []).map((r) =>
-                        r.vehicleTouched || typeof r.form.vehicleId === 'number' ? r : { ...r, form: { ...r.form, vehicleId: v.id } },
+                        typeof r.form.vehicleId === 'number' ? r : { ...r, form: { ...r.form, vehicleId: v.id } },
                       ),
                     }))
                   }}
-                  disabled={!step1Done || submitBusy}
+                  disabled={!step2Done || submitBusy}
                   type="button"
                 >
                   <div className="vehicle-name">{v.name}</div>
@@ -622,46 +695,15 @@ export default function NewServiceRecordPage() {
         )}
       </div>
 
-      <div className={`card stack${extractBusy ? ' extracting' : ''}`} style={{ opacity: step1Done ? 1 : 0.6 }}>
+      <div className={`card stack${extractBusy ? ' extracting' : ''}`} style={{ opacity: step1Done && step2Done ? 1 : 0.6 }}>
         <div className="row">
-          <strong>3) Review</strong>
-          <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
-            <button
-              className="btn small"
-              disabled={!canExtractAny || extractBusy || submitBusy}
-              onClick={() => {
-                setExtractFailed(false)
-                setExtractMessage(null)
-                lastExtractSigRef.current = ''
-                setForceExtractTick((n) => n + 1)
-                setDraft((d) => ({ ...d, extracted: undefined, records: undefined }))
-              }}
-              type="button"
-              aria-label="Retry extraction"
-              title="Retry"
-            >
-              <RefreshIcon />
-            </button>
-          </div>
+          <strong>4) Review</strong>
         </div>
 
-        {extractFailed ? (
-          <div className="error">
-            <div>Failed to extract values. Enter manually or try again.</div>
-            {extractMessage ? (
-              <div className="muted" style={{ marginTop: 6, whiteSpace: 'pre-wrap' }}>
-                {extractMessage.length > 800 ? `${extractMessage.slice(0, 800)}…` : extractMessage}
-              </div>
-            ) : null}
-          </div>
-        ) : extractMessage ? (
-          <div className="muted" style={{ whiteSpace: 'pre-wrap' }}>
-            {extractMessage.length > 500 ? `${extractMessage.slice(0, 500)}…` : extractMessage}
-          </div>
-        ) : null}
-
         {!hasRecords ? (
-          <div className="muted">{extractBusy ? 'Extracting records. This can take a minute.' : 'No extracted records yet.'}</div>
+          <div className="muted">
+            {extractBusy ? 'Extracting records. This can take a minute.' : step2Done ? 'No extracted records yet.' : 'Extract to generate records.'}
+          </div>
         ) : null}
 
         {(draft.records ?? []).map((r, idx) => {
@@ -681,30 +723,6 @@ export default function NewServiceRecordPage() {
                   {r.submitError}
                 </div>
               ) : null}
-
-              <div className="field">
-                <label>Vehicle</label>
-                <select
-                  value={typeof r.form.vehicleId === 'number' ? String(r.form.vehicleId) : ''}
-                  onChange={(e) => {
-                    updateRecord(r.id, (prev) => ({
-                      ...prev,
-                      vehicleTouched: true,
-                      form: { ...prev.form, vehicleId: Number(e.target.value) },
-                    }))
-                  }}
-                  disabled={submitBusy || isSubmitted}
-                >
-                  <option value="" disabled>
-                    Select…
-                  </option>
-                  {vehicles.map((v) => (
-                    <option key={v.id} value={String(v.id)}>
-                      {v.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
 
               <div className="grid two no-collapse">
                 <div className="field">
