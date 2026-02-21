@@ -158,6 +158,8 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
  - Do not produce a record for every part.
  - Keep "description" VERY concise (2-6 words). Put the detailed work performed (parts/labor/steps) in "notes".
    Example: description="AC repair", notes="Evacuated/recharged system; replaced condenser; replaced O-rings; leak test; added dye."
+ - Cost sanity: if the invoice has a clear overall total, allocate per-record "totalCost" values so that the SUM of all record totalCost values matches the invoice total as closely as possible.
+   If you cannot confidently allocate costs per record, keep the records but set some totalCost to null and explain the mismatch/uncertainty in "explanation".
  - If you cannot determine a value, set it to null and briefly explain why in explanation.
 `.trim()
 
