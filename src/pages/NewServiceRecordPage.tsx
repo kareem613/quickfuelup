@@ -9,6 +9,10 @@ import { extractServiceFromDocumentWithFallback } from '../lib/llm'
 import { addServiceLikeRecord, getExtraFields, getVehicles, uploadDocuments } from '../lib/lubelogger'
 import { pdfToTextAndImages } from '../lib/pdf'
 import type { ServiceDraft, ServiceDraftRecord, ServiceLikeRecordType, Vehicle } from '../lib/types'
+import { InvoiceStep } from './newServiceRecord/InvoiceStep'
+import { ExtractStep } from './newServiceRecord/ExtractStep'
+import { VehicleStep } from './newServiceRecord/VehicleStep'
+import { ReviewStep } from './newServiceRecord/ReviewStep'
 
 function numberOrEmpty(n: number | undefined) {
   return typeof n === 'number' && Number.isFinite(n) ? String(n) : ''
@@ -662,456 +666,105 @@ export default function NewServiceRecordPage() {
         </div>
       ) : null}
 
-      <div className={`card stack${step1Done && !card1Open ? ' collapsed' : ''}`}>
-        <button
-          className="row card-header-btn"
-          type="button"
-          onClick={() => {
-            if (!step1Done) return
-            card1Touched.current = true
-            setCard1Open((v) => !v)
-          }}
-        >
-          <strong>1) Invoice / receipt (PDF or image)</strong>
-          {step1Done ? <DoneIcon /> : <span className="muted">Required</span>}
-        </button>
-        {step1Done && !card1Open ? null : (
-          <>
-            <div className={`image-preview clickable split${docBusy || submitBusy ? ' disabled' : ''}`}>
-              {previewUrl ? <img src={previewUrl} alt="Document preview" /> : null}
-              <div className="image-split-overlay" aria-hidden="true">
-                <button
-                  className="image-split-btn"
-                  type="button"
-                  onClick={() => docCameraInputRef.current?.click()}
-                  disabled={docBusy || submitBusy}
-                >
-                  <CameraIcon />
-                  <div>Camera</div>
-                </button>
-                <button
-                  className="image-split-btn"
-                  type="button"
-                  onClick={() => docFileInputRef.current?.click()}
-                  disabled={docBusy || submitBusy}
-                >
-                  <FileIcon />
-                  <div>Files</div>
-                </button>
-              </div>
-              {!previewUrl ? <div className="image-placeholder" aria-hidden="true" /> : null}
-            </div>
-            <input
-              ref={docCameraInputRef}
-              className="sr-only"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={(e) => onDocumentChange(e.target.files?.[0] ?? null)}
-              disabled={docBusy || submitBusy}
-            />
-            <input
-              ref={docFileInputRef}
-              className="sr-only"
-              type="file"
-              accept="application/pdf,image/*"
-              onChange={(e) => onDocumentChange(e.target.files?.[0] ?? null)}
-              disabled={docBusy || submitBusy}
-            />
-            <div className="muted">
-              {draft.document ? `Selected: ${draft.document.name}` : ''}
-              {draft.document && draft.documentText ? ` (text extracted)` : draft.document ? '' : ''}
-            </div>
-          </>
-        )}
-      </div>
+      <InvoiceStep
+        stepDone={step1Done}
+        open={card1Open}
+        onToggle={() => {
+          if (!step1Done) return
+          card1Touched.current = true
+          setCard1Open((v) => !v)
+        }}
+        previewUrl={previewUrl}
+        docBusy={docBusy}
+        submitBusy={submitBusy}
+        docCameraInputRef={docCameraInputRef}
+        docFileInputRef={docFileInputRef}
+        onDocumentChange={onDocumentChange}
+        selectedLabel={`${draft.document ? `Selected: ${draft.document.name}` : ''}${draft.document && draft.documentText ? ` (text extracted)` : ''}`}
+        doneIcon={<DoneIcon />}
+        cameraIcon={<CameraIcon />}
+        fileIcon={<FileIcon />}
+      />
 
-      <div
-        className={`card stack${extractBusy ? ' extracting' : ''}${step2Done && !card2Open ? ' collapsed' : ''}`}
-        style={{ opacity: step1Done ? 1 : 0.6 }}
-      >
-        <button
-          className="row card-header-btn"
-          type="button"
-          onClick={() => {
-            if (!step1Done) return
-            if (!step2Done) return
-            card2Touched.current = true
-            setCard2Open((v) => !v)
-          }}
-        >
-          <strong>2) Extract</strong>
-          {step2Done ? <DoneIcon /> : <span className="muted">Required</span>}
-        </button>
+      <ExtractStep
+        step1Done={step1Done}
+        stepDone={step2Done}
+        open={card2Open}
+        extracting={extractBusy}
+        canExtractAny={canExtractAny}
+        submitBusy={submitBusy}
+        extractFailed={extractFailed}
+        extractMessage={extractMessage}
+        keepOpen={keepExtractOpen}
+        onToggle={() => {
+          if (!step1Done) return
+          if (!step2Done) return
+          card2Touched.current = true
+          setCard2Open((v) => !v)
+        }}
+        onRetry={() => {
+          setExtractFailed(false)
+          setExtractMessage(null)
+          lastExtractSigRef.current = ''
+          setForceExtractTick((n) => n + 1)
+          setDraft((d) => ({ ...d, extracted: undefined, records: undefined }))
+        }}
+        doneIcon={<DoneIcon />}
+        refreshIcon={<RefreshIcon />}
+      />
 
-        {step2Done && !card2Open ? null : !step1Done ? (
-          <div className="muted">Upload an invoice to start extraction.</div>
-        ) : (
-          <>
-            <div className="row" style={{ justifyContent: 'space-between' }}>
-              <div className="muted">{extractBusy ? 'Extracting records. This can take a minute.' : step2Done ? 'Done.' : 'Starting…'}</div>
-              <button
-                className="btn small"
-                disabled={!canExtractAny || extractBusy || submitBusy}
-                onClick={() => {
-                  setExtractFailed(false)
-                  setExtractMessage(null)
-                  lastExtractSigRef.current = ''
-                  setForceExtractTick((n) => n + 1)
-                  setDraft((d) => ({ ...d, extracted: undefined, records: undefined }))
-                }}
-                type="button"
-                aria-label="Retry extraction"
-                title="Retry"
-              >
-                <RefreshIcon />
-              </button>
-            </div>
+      <VehicleStep
+        step1Done={step1Done}
+        stepDone={step3Done}
+        open={card3Open}
+        anyInvalid={anyVehicleIdInvalid}
+        selectedVehicleName={selectedVehicleName}
+        vehicles={vehicles}
+        selectedVehicleId={draft.vehicleId}
+        anyVehicleWarning={anyVehicleIdWarning}
+        busy={busy}
+        submitBusy={submitBusy}
+        onToggle={() => {
+          if (!step1Done) return
+          card3Touched.current = true
+          setCard3Open((v) => !v)
+        }}
+        onSelectVehicle={(vehicleId) => {
+          vehicleTouched.current = true
+          setDraft((d) => ({
+            ...d,
+            vehicleId,
+            extracted:
+              d.extracted?.warnings?.length
+                ? { ...d.extracted, warnings: d.extracted.warnings.filter((w) => !/^\/records\/\d+\/vehicleId$/.test(w.path)) }
+                : d.extracted,
+            records: (d.records ?? []).map((r) => (typeof r.form.vehicleId === 'number' ? r : { ...r, form: { ...r.form, vehicleId } })),
+          }))
+        }}
+        splitVehicleName={splitVehicleName}
+        doneIcon={<DoneIcon />}
+      />
 
-            {extractFailed ? (
-              <div className="error">
-                <div>Failed to extract values. Enter manually or try again.</div>
-                {extractMessage ? (
-                  <div className="muted" style={{ marginTop: 6, whiteSpace: 'pre-wrap' }}>
-                    {extractMessage.length > 800 ? `${extractMessage.slice(0, 800)}…` : extractMessage}
-                  </div>
-                ) : null}
-              </div>
-            ) : extractMessage ? (
-              <div className="muted" style={{ whiteSpace: 'pre-wrap' }}>
-                {extractMessage.length > 500 ? `${extractMessage.slice(0, 500)}…` : extractMessage}
-              </div>
-            ) : null}
-          </>
-        )}
-      </div>
-
-      <div
-        className={`card stack${step3Done && !card3Open ? ' collapsed' : ''}${anyVehicleIdInvalid ? ' invalid' : ''}`}
-        style={{ opacity: step1Done ? 1 : 0.6 }}
-      >
-        <button
-          className="row card-header-btn"
-          type="button"
-          onClick={() => {
-            if (!step1Done) return
-            card3Touched.current = true
-            setCard3Open((v) => !v)
-          }}
-        >
-          <strong>3) Vehicle{selectedVehicleName ? `: ${selectedVehicleName}` : ''}</strong>
-          {step3Done ? <DoneIcon /> : <span className="muted">Required</span>}
-        </button>
-
-        {step3Done && !card3Open ? null : !step1Done ? (
-          <div className="muted">Upload an invoice first.</div>
-        ) : busy ? (
-          <div className="muted">Loading vehicles…</div>
-        ) : (
-          <div className="vehicle-grid">
-            {vehicles.map((v) => {
-              const selected = draft.vehicleId === v.id
-              return (
-                <button
-                  key={v.id}
-                  className={`vehicle-card${selected ? ' selected' : ''}${selected && anyVehicleIdWarning ? ' warn' : ''}`}
-                  onClick={() => {
-                    vehicleTouched.current = true
-                    setDraft((d) => ({
-                      ...d,
-                      vehicleId: v.id,
-                      extracted:
-                        d.extracted?.warnings?.length
-                          ? { ...d.extracted, warnings: d.extracted.warnings.filter((w) => !/^\/records\/\d+\/vehicleId$/.test(w.path)) }
-                          : d.extracted,
-                      records: (d.records ?? []).map((r) =>
-                        typeof r.form.vehicleId === 'number' ? r : { ...r, form: { ...r.form, vehicleId: v.id } },
-                      ),
-                    }))
-                  }}
-                  disabled={submitBusy}
-                  type="button"
-                >
-                  {(() => {
-                    const parts = splitVehicleName(v.name)
-                    return (
-                      <div className="vehicle-name">
-                        {parts.year ? <div className="vehicle-year">{parts.year}</div> : null}
-                        <div className="vehicle-model">{parts.model}</div>
-                      </div>
-                    )
-                  })()}
-                </button>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className={`card stack`} style={{ opacity: step1Done && step2Done ? 1 : 0.6 }}>
-        <div className="row">
-          <strong>4) Review</strong>
-        </div>
-
-        {!hasRecords ? (
-          <div className="muted">No records have been extracted.</div>
-        ) : null}
-
-        {(draft.records ?? []).map((r, idx) => {
-          const required = requiredExtraFieldsFor(r.form.recordType)
-          const datalistId = `extra-field-names-${r.id}`
-          const isSubmitted = r.status === 'submitted'
-          const attempted = Boolean(r.validationAttempted)
-
-          const invalidRecordType = attempted && !r.form.recordType
-          const invalidOdometer =
-            attempted && !(typeof r.form.odometer === 'number' && Number.isFinite(r.form.odometer) && r.form.odometer >= 0)
-          const invalidDescription = attempted && !(typeof r.form.description === 'string' && Boolean(r.form.description.trim()))
-          const invalidTotalCost =
-            attempted && !(typeof r.form.cost === 'number' && Number.isFinite(r.form.cost) && r.form.cost > 0)
-          const invalidDate = attempted && !(typeof (r.form.date ?? draft.date) === 'string' && Boolean(r.form.date ?? draft.date))
-          const warnRecordType = hasWarningForRecordField(idx, 'recordType')
-          const warnDate = hasWarningForRecordField(idx, 'date')
-          const warnOdometer = hasWarningForRecordField(idx, 'odometer')
-          const warnDescription = hasWarningForRecordField(idx, 'description')
-          const warnTotalCost = hasWarningForRecordField(idx, 'totalCost')
-          const warnTags = hasWarningForRecordField(idx, 'tags')
-          const warnNotes = hasWarningForRecordField(idx, 'notes')
-          return (
-            <div key={r.id} className="card stack" style={{ padding: 14 }}>
-              <div className="row">
-                <strong>Record {idx + 1}</strong>
-                {isSubmitted ? <DoneIcon /> : <span className="muted">{r.status === 'failed' ? 'Needs attention' : 'Pending'}</span>}
-              </div>
-
-              {r.submitError ? (
-                <div className="error" style={{ whiteSpace: 'pre-wrap' }}>
-                  {r.submitError}
-                </div>
-              ) : null}
-
-              <div className="grid two no-collapse">
-                <div className={`field${warnRecordType ? ' warn' : ''}${invalidRecordType ? ' invalid' : ''}`}>
-                  <label>Record type</label>
-                  <select
-                    value={r.form.recordType ?? ''}
-                    onChange={(e) => {
-                      updateRecordAndClearWarnings({
-                        id: r.id,
-                        clearPaths: [`/records/${idx}/recordType`],
-                        fn: (prev) => ({
-                          ...prev,
-                          recordTypeTouched: true,
-                          form: { ...prev.form, recordType: e.target.value as ServiceLikeRecordType },
-                        }),
-                      })
-                    }}
-                    disabled={submitBusy || isSubmitted}
-                  >
-                    <option value="" disabled>
-                      Select…
-                    </option>
-                    <option value="service">Service</option>
-                    <option value="repair">Repair</option>
-                    <option value="upgrade">Upgrade</option>
-                  </select>
-                </div>
-                <div className={`field${warnDate ? ' warn' : ''}${invalidDate ? ' invalid' : ''}`}>
-                  <label>Date</label>
-                  <input
-                    type="date"
-                    value={r.form.date ?? draft.date}
-                    onChange={(e) =>
-                      updateRecordAndClearWarnings({
-                        id: r.id,
-                        clearPaths: [`/records/${idx}/date`],
-                        fn: (prev) => ({ ...prev, form: { ...prev.form, date: e.target.value } }),
-                      })
-                    }
-                    disabled={submitBusy || isSubmitted}
-                  />
-                </div>
-              </div>
-
-              <div className={`field${warnOdometer ? ' warn' : ''}${invalidOdometer ? ' invalid' : ''}`}>
-                <label>Odometer</label>
-                <input
-                  inputMode="numeric"
-                  value={numberOrEmpty(r.form.odometer)}
-                  onChange={(e) => {
-                    const n = Number(e.target.value)
-                    updateRecordAndClearWarnings({
-                      id: r.id,
-                      clearPaths: [`/records/${idx}/odometer`],
-                      fn: (prev) => ({ ...prev, form: { ...prev.form, odometer: Number.isFinite(n) ? n : undefined } }),
-                    })
-                  }}
-                  disabled={submitBusy || isSubmitted}
-                />
-              </div>
-
-              <div className={`field${warnDescription ? ' warn' : ''}${invalidDescription ? ' invalid' : ''}`}>
-                <label>Description</label>
-                <input
-                  value={r.form.description ?? ''}
-                  onChange={(e) =>
-                    updateRecordAndClearWarnings({
-                      id: r.id,
-                      clearPaths: [`/records/${idx}/description`],
-                      fn: (prev) => ({ ...prev, form: { ...prev.form, description: e.target.value } }),
-                    })
-                  }
-                  disabled={submitBusy || isSubmitted}
-                />
-              </div>
-
-              <div className="grid two no-collapse">
-                <div className={`field${warnTotalCost ? ' warn' : ''}${invalidTotalCost ? ' invalid' : ''}`}>
-                  <label>Total cost</label>
-                  <input
-                    inputMode="decimal"
-                    value={numberOrEmpty(r.form.cost)}
-                    onChange={(e) => {
-                      const n = Number(e.target.value)
-                      updateRecordAndClearWarnings({
-                        id: r.id,
-                        clearPaths: [`/records/${idx}/totalCost`],
-                        fn: (prev) => ({ ...prev, form: { ...prev.form, cost: Number.isFinite(n) ? n : undefined } }),
-                      })
-                    }}
-                    disabled={submitBusy || isSubmitted}
-                  />
-                </div>
-                <div className={`field${warnTags ? ' warn' : ''}`}>
-                  <label>Tags (optional)</label>
-                  <input
-                    value={r.form.tags ?? ''}
-                    onChange={(e) =>
-                      updateRecordAndClearWarnings({
-                        id: r.id,
-                        clearPaths: [`/records/${idx}/tags`],
-                        fn: (prev) => ({ ...prev, form: { ...prev.form, tags: e.target.value } }),
-                      })
-                    }
-                    disabled={submitBusy || isSubmitted}
-                    placeholder="oilchange tires …"
-                  />
-                </div>
-              </div>
-
-              <div className={`field${warnNotes ? ' warn' : ''}`}>
-                <label>Notes (optional)</label>
-                <textarea
-                  rows={2}
-                  value={r.form.notes ?? ''}
-                  onChange={(e) =>
-                    updateRecordAndClearWarnings({
-                      id: r.id,
-                      clearPaths: [`/records/${idx}/notes`],
-                      fn: (prev) => ({ ...prev, form: { ...prev.form, notes: e.target.value } }),
-                    })
-                  }
-                  disabled={submitBusy || isSubmitted}
-                />
-              </div>
-
-              <div className="card stack" style={{ padding: 14 }}>
-                <div className="row">
-                  <strong>Extra fields</strong>
-                  <button
-                    className="btn small"
-                    type="button"
-                    onClick={() => {
-                      updateRecord(r.id, (prev) => ({
-                        ...prev,
-                        form: { ...prev.form, extraFields: [...(prev.form.extraFields ?? []), { name: '', value: '' }] },
-                      }))
-                    }}
-                    disabled={submitBusy || isSubmitted}
-                  >
-                    Add
-                  </button>
-                </div>
-                {(r.form.extraFields ?? []).length === 0 ? <div className="muted">None</div> : null}
-                {(r.form.extraFields ?? []).map((ef, efIdx) => {
-                  const isReq = required.includes(ef.name)
-                  const missingRequired = isReq && !ef.value.trim()
-                  return (
-                    <div key={efIdx} className="grid two no-collapse" style={{ alignItems: 'flex-end' }}>
-                      <div className="field">
-                        <label>{isReq ? `Name (required)` : 'Name'}</label>
-                        <input
-                          value={ef.name}
-                          onChange={(e) => {
-                            updateRecord(r.id, (prev) => {
-                              const next = (prev.form.extraFields ?? []).slice()
-                              next[efIdx] = { ...ef, name: e.target.value }
-                              return { ...prev, form: { ...prev.form, extraFields: next } }
-                            })
-                          }}
-                          disabled={submitBusy || isSubmitted}
-                          list={datalistId}
-                        />
-                      </div>
-                      <div className={`field${missingRequired && attempted ? ' invalid' : ''}`}>
-                        <label>{missingRequired ? 'Value (required)' : 'Value'}</label>
-                        <input
-                          value={ef.value}
-                          onChange={(e) => {
-                            updateRecord(r.id, (prev) => {
-                              const next = (prev.form.extraFields ?? []).slice()
-                              next[efIdx] = { ...ef, value: e.target.value }
-                              return { ...prev, form: { ...prev.form, extraFields: next } }
-                            })
-                          }}
-                          disabled={submitBusy || isSubmitted}
-                        />
-                      </div>
-                      <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
-                        <button
-                          className="btn small"
-                          type="button"
-                          onClick={() => {
-                            updateRecord(r.id, (prev) => {
-                              const next = (prev.form.extraFields ?? []).slice()
-                              next.splice(efIdx, 1)
-                              return { ...prev, form: { ...prev.form, extraFields: next } }
-                            })
-                          }}
-                          disabled={submitBusy || isSubmitted}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-                <datalist id={datalistId}>
-                  {(r.form.recordType
-                    ? extraFieldNamesByRecordType[mappedRecordType(r.form.recordType)] ?? []
-                    : []
-                  ).map((n) => (
-                    <option key={n} value={n} />
-                  ))}
-                </datalist>
-              </div>
-
-              {attempted && !recordCanSubmit(r) ? <div className="error">Some fields are missing or invalid.</div> : null}
-              <div className="actions">
-                <button
-                  className="btn primary"
-                  disabled={submitBusy || extractBusy || docBusy || isSubmitted}
-                  onClick={() => onSubmitRecord(r.id)}
-                  type="button"
-                >
-                  {r.status === 'submitting' ? 'Submitting…' : isSubmitted ? 'Submitted' : 'Submit to LubeLogger'}
-                </button>
-              </div>
-            </div>
-          )
-        })}
-
-      </div>
+      <ReviewStep
+        step1Done={step1Done}
+        step2Done={step2Done}
+        hasRecords={hasRecords}
+        draftDate={draft.date}
+        records={draft.records ?? []}
+        submitBusy={submitBusy}
+        extractBusy={extractBusy}
+        docBusy={docBusy}
+        numberOrEmpty={numberOrEmpty}
+        requiredExtraFieldsFor={requiredExtraFieldsFor}
+        recordCanSubmit={recordCanSubmit}
+        mappedRecordType={mappedRecordType}
+        extraFieldNamesByRecordType={extraFieldNamesByRecordType}
+        updateRecord={updateRecord}
+        updateRecordAndClearWarnings={updateRecordAndClearWarnings}
+        hasWarningForRecordField={hasWarningForRecordField}
+        onSubmitRecord={onSubmitRecord}
+        doneIcon={<DoneIcon />}
+      />
 
       <div className="actions">
         <button
