@@ -20,8 +20,8 @@ export default function HowItWorksPage(props: { onDismiss?: () => void }) {
       <div className="card stack">
         <h3 style={{ margin: 0 }}>Welcome 👋</h3>
         <div className="muted">
-          QuickFillUp is a small web app that helps you log a fuel fill-up to your LubeLogger instance fast — using two
-          photos and AI to pre-fill the numbers.
+          QuickFillUp is a small web app that helps you log fuel fill-ups and service records to your LubeLogger
+          instance faster, using AI to pre-fill forms.
         </div>
 
         <div className="stack" style={{ gap: 10 }}>
@@ -33,11 +33,12 @@ export default function HowItWorksPage(props: { onDismiss?: () => void }) {
                 <strong>Editor</strong>.
               </li>
               <li>
-                Add at least one <strong>AI</strong> key (Gemini or Anthropic) for photo extraction.
+                Add at least one <strong>AI</strong> key (Gemini or Anthropic) for extraction.
               </li>
               <li>
                 Tap <strong>Test connection</strong> to make sure everything can talk to your LubeLogger instance.
               </li>
+              <li>Optional: Pick which model to use for Fuel vs Service.</li>
               <li>
                 Optional: Install the app to get an icon on your home screen.
               </li>
@@ -56,15 +57,16 @@ export default function HowItWorksPage(props: { onDismiss?: () => void }) {
           <div>
             <strong>Logging a service/repair/upgrade record</strong>
             <ol style={{ margin: '8px 0 0 18px' }}>
-              <li>Select your vehicle.</li>
-              <li>Select an invoice/receipt file (PDF or image).</li>
-              <li>Confirm the extracted values (including extra fields), then submit.</li>
+              <li>Upload an invoice/receipt (PDF or image).</li>
+              <li>Wait for extraction (it may create multiple records from one invoice).</li>
+              <li>Select a vehicle (auto-selected when possible).</li>
+              <li>Review each record and submit.</li>
             </ol>
           </div>
 
           <div className="muted">
-            Tip: If submission fails, your photos stay saved until it succeeds — so you can retry without taking them
-            again.
+            Tip: If submission fails, your images/docs stay saved until it succeeds — so you can retry without
+            re-uploading.
           </div>
 
           <div className="muted">
