@@ -203,7 +203,7 @@ export default function NewServiceRecordPage() {
       setVehiclesLoadProblem(null)
       try {
         const [v, defs, existingDraft] = await Promise.all([
-          withTimeout(getVehicles(cfg), 6000, 'Loading vehicles'),
+          withTimeout(getVehicles(cfg, { includeSold: Boolean(cfg.showSoldVehicles) }), 6000, 'Loading vehicles'),
           withTimeout(getExtraFields(cfg), 6000, 'Loading extra fields'),
           loadServiceDraft(),
         ])

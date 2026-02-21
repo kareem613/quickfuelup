@@ -182,7 +182,7 @@ export default function NewEntryPage() {
       setError(null)
       setVehiclesLoadProblem(null)
       try {
-        const v = await withTimeout(getVehicles(cfg), 6000, 'Loading vehicles')
+        const v = await withTimeout(getVehicles(cfg, { includeSold: Boolean(cfg.showSoldVehicles) }), 6000, 'Loading vehicles')
         const existingDraft = await loadDraft()
         setVehicles(v)
         const initial =

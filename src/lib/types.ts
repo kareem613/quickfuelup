@@ -4,6 +4,8 @@ export type AppConfig = {
   baseUrl: string
   lubeLoggerApiKey: string
   cultureInvariant: boolean
+  // When false/undefined, sold vehicles are hidden from pickers.
+  showSoldVehicles?: boolean
   useProxy: boolean
   llm: {
     providerOrder: LlmProvider[]

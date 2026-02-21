@@ -24,7 +24,7 @@ export async function whoAmI(cfg: AppConfig) {
   return res.json()
 }
 
-export async function getVehicles(cfg: AppConfig): Promise<Vehicle[]> {
+export async function getVehicles(cfg: AppConfig, opts?: { includeSold?: boolean }): Promise<Vehicle[]> {
   const res = await fetch(apiUrl(cfg, '/vehicles'), {
     headers: buildHeaders(cfg),
   })
@@ -32,6 +32,7 @@ export async function getVehicles(cfg: AppConfig): Promise<Vehicle[]> {
   const data = (await res.json()) as unknown
 
   if (!Array.isArray(data)) return []
+  const includeSold = Boolean(opts?.includeSold)
 
   return data
     .map((v): Vehicle | null => {
@@ -40,14 +41,16 @@ export async function getVehicles(cfg: AppConfig): Promise<Vehicle[]> {
       const id = Number(obj.id)
       if (!Number.isFinite(id)) return null
 
-      // LubeLogger vehicles have SoldDate (empty when active). Hide sold vehicles from pickers.
-      const soldDate =
-        typeof obj.soldDate === 'string'
-          ? obj.soldDate
-          : typeof obj.SoldDate === 'string'
-            ? obj.SoldDate
-            : ''
-      if (soldDate.trim()) return null
+      if (!includeSold) {
+        // LubeLogger vehicles have SoldDate (empty when active). Hide sold vehicles from pickers.
+        const soldDate =
+          typeof obj.soldDate === 'string'
+            ? obj.soldDate
+            : typeof obj.SoldDate === 'string'
+              ? obj.SoldDate
+              : ''
+        if (soldDate.trim()) return null
+      }
 
       const byName = obj.name ?? obj.description
       const year = typeof obj.year === 'number' ? obj.year : Number(obj.year)

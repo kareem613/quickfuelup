@@ -62,6 +62,7 @@ export default function SettingsPage() {
   const [openModelPicker, setOpenModelPicker] = useState<null | 'geminiFuel' | 'geminiService' | 'anthropicFuel' | 'anthropicService'>(null)
   const closePickerTimer = useRef<number | null>(null)
   const [cultureInvariant, setCultureInvariant] = useState(existing?.cultureInvariant ?? true)
+  const [showSoldVehicles, setShowSoldVehicles] = useState(existing?.showSoldVehicles ?? false)
   const [testResult, setTestResult] = useState<string | null>(null)
   const [busyTest, setBusyTest] = useState(false)
   const [connectedAs, setConnectedAs] = useState<{ username: string; isAdmin: boolean } | null>(null)
@@ -95,9 +96,10 @@ export default function SettingsPage() {
           baseUrl: baseUrl.trim().replace(/\/+$/, ''),
           lubeLoggerApiKey: lubeLoggerApiKey.trim(),
           cultureInvariant,
+          showSoldVehicles,
           useProxy: false,
           llm: {
-           providerOrder: activeProviders,
+            providerOrder: activeProviders,
             ...(geminiApiKey.trim() ? { geminiApiKey: geminiApiKey.trim() } : null),
             ...(anthropicApiKey.trim() ? { anthropicApiKey: anthropicApiKey.trim() } : null),
             ...(normalizeModelInput(geminiModelFuel) ? { geminiModelFuel: normalizeModelInput(geminiModelFuel) } : null),
@@ -442,6 +444,11 @@ export default function SettingsPage() {
             onChange={(e) => setCultureInvariant(e.target.checked)}
           />
           <span>Send LubeLogger “culture-invariant” header</span>
+        </label>
+
+        <label className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
+          <input type="checkbox" checked={showSoldVehicles} onChange={(e) => setShowSoldVehicles(e.target.checked)} />
+          <span>Show sold vehicles</span>
         </label>
 
         <div className="field">

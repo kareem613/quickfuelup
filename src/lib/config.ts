@@ -56,6 +56,7 @@ export function loadConfig(): AppConfig | null {
       baseUrl: String(parsed.baseUrl).replace(/\/+$/, ''),
       lubeLoggerApiKey: String(parsed.lubeLoggerApiKey),
       cultureInvariant: parsed.cultureInvariant === undefined ? true : Boolean(parsed.cultureInvariant),
+      showSoldVehicles: Boolean((parsed as Record<string, unknown>).showSoldVehicles),
       useProxy: Boolean(parsed.useProxy),
       llm: {
         providerOrder,
