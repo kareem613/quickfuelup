@@ -883,23 +883,24 @@ export default function NewServiceRecordPage() {
           )
         })}
 
-        <div className="actions">
-          <button
-            className="btn"
-            disabled={submitBusy || extractBusy || docBusy}
-            onClick={async () => {
-              await clearServiceDraft()
-              vehicleTouched.current = false
-              lastExtractSigRef.current = ''
-              setExtractFailed(false)
-              setExtractMessage(null)
-              setDraft({ date: todayISODate() })
-            }}
-            type="button"
-          >
-            Start over
-          </button>
-        </div>
+      </div>
+
+      <div className="actions">
+        <button
+          className="btn"
+          disabled={submitBusy || extractBusy || docBusy}
+          onClick={async () => {
+            await clearServiceDraft()
+            vehicleTouched.current = false
+            lastExtractSigRef.current = ''
+            setExtractFailed(false)
+            setExtractMessage(null)
+            setDraft({ date: todayISODate() })
+          }}
+          type="button"
+        >
+          Start over
+        </button>
       </div>
 
       {docBusy || extractBusy ? <div className="muted">{docBusy ? 'Processing document…' : 'Extracting from document…'}</div> : null}
