@@ -119,7 +119,10 @@ export default function NewServiceRecordPage() {
       .map((p) => ({
         provider: p,
         apiKey: p === 'anthropic' ? (cfg?.llm.anthropicApiKey ?? '') : (cfg?.llm.geminiApiKey ?? ''),
-        model: p === 'anthropic' ? cfg?.llm.anthropicModelService : cfg?.llm.geminiModelService,
+        model:
+          p === 'anthropic'
+            ? (cfg?.llm.anthropicModelService ?? 'claude-sonnet-4-5')
+            : (cfg?.llm.geminiModelService ?? 'gemini-2.5-pro'),
       }))
       .filter((p) => p.apiKey.trim())
   }, [cfg])

@@ -237,7 +237,10 @@ export default function NewEntryPage() {
       .map((p) => ({
         provider: p,
         apiKey: p === 'anthropic' ? (cfg?.llm.anthropicApiKey ?? '') : (cfg?.llm.geminiApiKey ?? ''),
-        model: p === 'anthropic' ? cfg?.llm.anthropicModelFuel : cfg?.llm.geminiModelFuel,
+        model:
+          p === 'anthropic'
+            ? (cfg?.llm.anthropicModelFuel ?? 'claude-haiku-4-5')
+            : (cfg?.llm.geminiModelFuel ?? 'gemini-2.5-flash'),
       }))
       .filter((p) => p.apiKey.trim())
   }, [cfg])

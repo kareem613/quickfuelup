@@ -232,6 +232,39 @@ export default function SettingsPage() {
     return p === 'anthropic' ? 'Anthropic' : 'Gemini'
   }
 
+  const DEFAULT_GEMINI_FUEL = 'gemini-2.5-flash'
+  const DEFAULT_GEMINI_SERVICE = 'gemini-2.5-pro'
+  const DEFAULT_ANTHROPIC_FUEL = 'claude-haiku-4-5'
+  const DEFAULT_ANTHROPIC_SERVICE = 'claude-sonnet-4-5'
+
+  function costTier(provider: LlmProvider, modelId: string): 1 | 2 | 3 {
+    const id = modelId.toLowerCase()
+    if (provider === 'gemini') {
+      if (id.includes('flash-lite')) return 1
+      if (id.includes('flash')) return 2
+      if (id.includes('pro')) return 3
+      return 2
+    }
+    if (id.includes('haiku')) return 1
+    if (id.includes('sonnet')) return 2
+    if (id.includes('opus')) return 3
+    return 2
+  }
+
+  function costBadge(provider: LlmProvider, modelId: string) {
+    const tier = costTier(provider, modelId)
+    return tier === 1 ? '$' : tier === 2 ? '$$' : '$$$'
+  }
+
+  function sortModels(provider: LlmProvider, ids: string[]) {
+    return ids
+      .slice()
+      .sort((a, b) => costTier(provider, a) - costTier(provider, b) || a.localeCompare(b))
+  }
+
+  const sortedGeminiModels = useMemo(() => sortModels('gemini', geminiModels), [geminiModels])
+  const sortedAnthropicModels = useMemo(() => sortModels('anthropic', anthropicModels), [anthropicModels])
+
   function moveProvider(from: number, to: number) {
     setProviderOrder((prev) => {
       if (from === to) return prev
@@ -272,7 +305,7 @@ export default function SettingsPage() {
           return id
         })
         .filter((x): x is string => Boolean(x && x.startsWith('gemini-')))
-      if (names.length) setGeminiModels(Array.from(new Set([...names, ...geminiModels])).sort())
+      if (names.length) setGeminiModels(Array.from(new Set([...names, ...geminiModels])))
     } catch {
       // keep existing static list
     }
@@ -308,7 +341,7 @@ export default function SettingsPage() {
           return typeof obj.id === 'string' ? obj.id : null
         })
         .filter((x): x is string => Boolean(x))
-      if (ids.length) setAnthropicModels(Array.from(new Set([...ids, ...anthropicModels])).sort())
+      if (ids.length) setAnthropicModels(Array.from(new Set([...ids, ...anthropicModels])))
     } catch {
       // keep existing static list
     }
@@ -422,11 +455,13 @@ export default function SettingsPage() {
         </div>
 
         <div className="field">
-          <label>Gemini model (Fuel)</label>
+          <label>
+            Gemini model (Fuel) {costBadge('gemini', geminiModelFuel.trim() || DEFAULT_GEMINI_FUEL)}
+          </label>
           <input
             value={geminiModelFuel}
             onChange={(e) => setGeminiModelFuel(e.target.value)}
-            placeholder="(default: gemini-2.5-flash)"
+            placeholder={`(default: ${DEFAULT_GEMINI_FUEL})`}
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
@@ -437,11 +472,13 @@ export default function SettingsPage() {
         </div>
 
         <div className="field">
-          <label>Gemini model (Service)</label>
+          <label>
+            Gemini model (Service) {costBadge('gemini', geminiModelService.trim() || DEFAULT_GEMINI_SERVICE)}
+          </label>
           <input
             value={geminiModelService}
             onChange={(e) => setGeminiModelService(e.target.value)}
-            placeholder="(default: gemini-2.5-pro)"
+            placeholder={`(default: ${DEFAULT_GEMINI_SERVICE})`}
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
@@ -452,11 +489,13 @@ export default function SettingsPage() {
         </div>
 
         <div className="field">
-          <label>Anthropic model (Fuel)</label>
+          <label>
+            Anthropic model (Fuel) {costBadge('anthropic', anthropicModelFuel.trim() || DEFAULT_ANTHROPIC_FUEL)}
+          </label>
           <input
             value={anthropicModelFuel}
             onChange={(e) => setAnthropicModelFuel(e.target.value)}
-            placeholder="(default: claude-haiku-4-5)"
+            placeholder={`(default: ${DEFAULT_ANTHROPIC_FUEL})`}
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
@@ -467,11 +506,13 @@ export default function SettingsPage() {
         </div>
 
         <div className="field">
-          <label>Anthropic model (Service)</label>
+          <label>
+            Anthropic model (Service) {costBadge('anthropic', anthropicModelService.trim() || DEFAULT_ANTHROPIC_SERVICE)}
+          </label>
           <input
             value={anthropicModelService}
             onChange={(e) => setAnthropicModelService(e.target.value)}
-            placeholder="(default: claude-haiku-4-5)"
+            placeholder={`(default: ${DEFAULT_ANTHROPIC_SERVICE})`}
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
@@ -482,14 +523,14 @@ export default function SettingsPage() {
         </div>
 
         <datalist id="gemini-models">
-          {geminiModels.map((m) => (
-            <option key={m} value={m} />
+          {sortedGeminiModels.map((m) => (
+            <option key={m} value={m} label={`${costBadge('gemini', m)} ${m}`} />
           ))}
         </datalist>
 
         <datalist id="anthropic-models">
-          {anthropicModels.map((m) => (
-            <option key={m} value={m} />
+          {sortedAnthropicModels.map((m) => (
+            <option key={m} value={m} label={`${costBadge('anthropic', m)} ${m}`} />
           ))}
         </datalist>
 
