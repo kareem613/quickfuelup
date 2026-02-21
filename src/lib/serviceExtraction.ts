@@ -27,5 +27,10 @@ export const ServiceExtractionSchema = z.object({
   explanation: NullableTrimmedString.optional(),
 })
 
-export type ServiceExtraction = z.infer<typeof ServiceExtractionSchema> & { rawJson?: unknown }
+export const ServiceExtractionResultSchema = z.object({
+  records: z.array(ServiceExtractionSchema).min(1),
+  explanation: NullableTrimmedString.optional(),
+})
 
+export type ServiceExtraction = z.infer<typeof ServiceExtractionSchema>
+export type ServiceExtractionResult = z.infer<typeof ServiceExtractionResultSchema> & { rawJson?: unknown }

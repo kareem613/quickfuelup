@@ -1,6 +1,7 @@
 import type { LlmProvider } from './types'
 import { extractFromImagesAnthropic, extractServiceFromDocumentAnthropic } from './anthropic'
 import { extractFromImages as extractFromImagesGemini, extractServiceFromDocument } from './gemini'
+import { ServiceExtractionResultSchema } from './serviceExtraction'
 
 export type ProviderWithKey = { provider: LlmProvider; apiKey: string }
 
@@ -62,21 +63,27 @@ export async function extractServiceFromDocumentWithFallback(params: {
   for (const p of providers) {
     try {
       if (p.provider === 'anthropic') {
-        return await extractServiceFromDocumentAnthropic({
+        const extracted = await extractServiceFromDocumentAnthropic({
           apiKey: p.apiKey,
           images: params.images,
           documentText: params.documentText,
           vehicles: params.vehicles,
           extraFieldNamesByRecordType: params.extraFieldNamesByRecordType,
         })
+        const parsed = ServiceExtractionResultSchema.safeParse(extracted)
+        if (!parsed.success) throw new Error(`Anthropic response did not match schema: ${JSON.stringify(extracted)}`)
+        return extracted
       }
-      return await extractServiceFromDocument({
+      const extracted = await extractServiceFromDocument({
         apiKey: p.apiKey,
         images: params.images,
         documentText: params.documentText,
         vehicles: params.vehicles,
         extraFieldNamesByRecordType: params.extraFieldNamesByRecordType,
       })
+      const parsed = ServiceExtractionResultSchema.safeParse(extracted)
+      if (!parsed.success) throw new Error(`Gemini response did not match schema: ${JSON.stringify(extracted)}`)
+      return extracted
     } catch (e) {
       lastErr = e
     }

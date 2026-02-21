@@ -7,7 +7,7 @@ import { compressImage } from '../lib/image'
 import { extractServiceFromDocumentWithFallback } from '../lib/llm'
 import { addServiceLikeRecord, getExtraFields, getVehicles, uploadDocuments } from '../lib/lubelogger'
 import { pdfToTextAndImages } from '../lib/pdf'
-import type { ExtraFieldValue, ServiceDraft, ServiceLikeRecordType, Vehicle } from '../lib/types'
+import type { ServiceDraft, ServiceDraftRecord, ServiceLikeRecordType, Vehicle } from '../lib/types'
 
 function numberOrEmpty(n: number | undefined) {
   return typeof n === 'number' && Number.isFinite(n) ? String(n) : ''
@@ -105,7 +105,6 @@ export default function NewServiceRecordPage() {
   const [successOpen, setSuccessOpen] = useState(false)
 
   const vehicleTouched = useRef(false)
-  const recordTypeTouched = useRef(false)
 
   const docInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -162,7 +161,7 @@ export default function NewServiceRecordPage() {
         ])
         setVehicles(v)
         setExtraFieldDefs(defs)
-        const initial = existingDraft ?? { date: todayISODate(), form: { extraFields: [] } }
+        const initial: ServiceDraft = existingDraft ?? { date: todayISODate() }
         const vehicleId = initial.vehicleId ?? (v.length === 1 ? v[0]?.id : undefined)
         setDraft({ ...initial, vehicleId })
       } catch (e) {
@@ -200,7 +199,7 @@ export default function NewServiceRecordPage() {
         documentImages: undefined,
         uploadedFiles: undefined,
         extracted: undefined,
-        form: { ...(draft.form ?? { extraFields: [] }) },
+        records: undefined,
       }
 
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
@@ -247,8 +246,15 @@ export default function NewServiceRecordPage() {
     if (!card2Touched.current) setCard2Open(false)
   }, [step2Done])
 
-  const canExtract = Boolean(cfg && draft.document && providersWithKeys.length && draft.documentImages?.length)
-  const form = draft.form ?? { extraFields: [] }
+  const canExtractAny = Boolean(cfg && draft.document && providersWithKeys.length && (draft.documentImages?.length || draft.documentText))
+  const hasRecords = Boolean(draft.records?.length)
+
+  function updateRecord(id: string, fn: (r: ServiceDraftRecord) => ServiceDraftRecord) {
+    setDraft((d) => ({
+      ...d,
+      records: (d.records ?? []).map((r) => (r.id === id ? fn(r) : r)),
+    }))
+  }
 
   useEffect(() => {
     if (!cfg) return
@@ -257,7 +263,7 @@ export default function NewServiceRecordPage() {
     if (providersWithKeys.length === 0) return
     const forced = forceExtractTick !== lastForceExtractTickRef.current
     if (docBusy || extractBusy || submitBusy) return
-    if (!forced && (typeof form.odometer === 'number' || typeof form.cost === 'number' || (form.description ?? '').trim())) return
+    if (!forced && draft.records?.length) return
     if (draft.extracted) return
 
     const sig = `${draft.vehicleId}:${draft.document.size}:${draft.document.name}:${draft.documentImages?.[0]?.size ?? 0}:${draft.documentText?.length ?? 0}:${draft.date}`
@@ -282,29 +288,39 @@ export default function NewServiceRecordPage() {
 
         if (extracted.explanation) setExtractMessage(extracted.explanation)
 
-        const nextIso = normalizeToISODate(extracted.date)
-        const nextVehicleId =
-          typeof extracted.vehicleId === 'number' && vehicles.some((v) => v.id === extracted.vehicleId) ? extracted.vehicleId : null
+        const anySuggestedVehicle = extracted.records
+          .map((r) => r.vehicleId)
+          .find((id) => typeof id === 'number' && vehicles.some((v) => v.id === id))
+
+        const baseVehicleId = (!vehicleTouched.current && anySuggestedVehicle ? anySuggestedVehicle : draft.vehicleId) ?? null
+
+        const records: ServiceDraftRecord[] = extracted.records.map((r, idx) => {
+          const vehicleId =
+            typeof r.vehicleId === 'number' && vehicles.some((v) => v.id === r.vehicleId) ? r.vehicleId : baseVehicleId
+          const iso = normalizeToISODate(r.date)
+          return {
+            id: `rec-${idx + 1}`,
+            status: 'pending',
+            extracted: r,
+            form: {
+              vehicleId: vehicleId ?? undefined,
+              recordType: r.recordType ?? undefined,
+              date: iso ?? undefined,
+              odometer: r.odometer ?? undefined,
+              description: r.description ?? undefined,
+              cost: r.totalCost ?? undefined,
+              notes: r.notes ?? undefined,
+              tags: r.tags ?? undefined,
+              extraFields: (r.extraFields ?? undefined) ?? [],
+            },
+          }
+        })
 
         setDraft((d) => ({
           ...d,
-          vehicleId: !vehicleTouched.current && nextVehicleId ? nextVehicleId : d.vehicleId,
+          vehicleId: !vehicleTouched.current && anySuggestedVehicle ? anySuggestedVehicle : d.vehicleId,
           extracted,
-          form: {
-            ...(d.form ?? { extraFields: [] }),
-            recordType:
-              recordTypeTouched.current || !extracted.recordType ? (d.form?.recordType ?? d.recordType) : extracted.recordType ?? undefined,
-            date: typeof d.form?.date === 'string' ? d.form.date : nextIso ?? undefined,
-            odometer: typeof d.form?.odometer === 'number' ? d.form.odometer : extracted.odometer ?? undefined,
-            description: typeof d.form?.description === 'string' && d.form.description.trim() ? d.form.description : extracted.description ?? undefined,
-            cost: typeof d.form?.cost === 'number' ? d.form.cost : extracted.totalCost ?? undefined,
-            notes: typeof d.form?.notes === 'string' ? d.form.notes : extracted.notes ?? undefined,
-            tags: typeof d.form?.tags === 'string' ? d.form.tags : extracted.tags ?? undefined,
-            extraFields:
-              Array.isArray(d.form?.extraFields) && d.form.extraFields.length
-                ? d.form.extraFields
-                : (extracted.extraFields ?? undefined) ?? [],
-          },
+          records,
         }))
       } catch (e) {
         setExtractFailed(true)
@@ -325,47 +341,49 @@ export default function NewServiceRecordPage() {
     extractBusy,
     extraFieldNamesByRecordType,
     forceExtractTick,
-    form.cost,
-    form.description,
-    form.odometer,
     providersWithKeys,
     submitBusy,
     vehicles,
   ])
 
-  const selectedRecordType: ServiceLikeRecordType | undefined = form.recordType ?? draft.recordType
-  const requiredExtraFields = useMemo(() => {
-    const mappedType =
-      selectedRecordType === 'repair' ? 'RepairRecord' : selectedRecordType === 'upgrade' ? 'UpgradeRecord' : 'ServiceRecord'
-    const group = extraFieldDefs.find((g) => g.recordType === mappedType)
+  function mappedRecordType(t: ServiceLikeRecordType | undefined) {
+    return t === 'repair' ? 'RepairRecord' : t === 'upgrade' ? 'UpgradeRecord' : 'ServiceRecord'
+  }
+
+  function requiredExtraFieldsFor(t: ServiceLikeRecordType | undefined) {
+    const group = extraFieldDefs.find((g) => g.recordType === mappedRecordType(t))
     return (group?.extraFields ?? []).filter((x) => String(x.isRequired ?? '').toLowerCase() === 'true').map((x) => x.name)
-  }, [extraFieldDefs, selectedRecordType])
+  }
 
-  const canSubmit =
-    Boolean(draft.vehicleId) &&
-    Boolean(selectedRecordType) &&
-    typeof form.date === 'string' &&
-    Boolean(form.date) &&
-    typeof form.odometer === 'number' &&
-    Number.isFinite(form.odometer) &&
-    form.odometer >= 0 &&
-    typeof form.cost === 'number' &&
-    Number.isFinite(form.cost) &&
-    form.cost > 0 &&
-    typeof form.description === 'string' &&
-    Boolean(form.description.trim()) &&
-    requiredExtraFields.every((name) => (form.extraFields ?? []).some((ef) => ef.name === name && ef.value.trim()))
+  function recordCanSubmit(r: ServiceDraftRecord) {
+    const req = requiredExtraFieldsFor(r.form.recordType)
+    return (
+      typeof r.form.vehicleId === 'number' &&
+      Boolean(r.form.recordType) &&
+      typeof r.form.date === 'string' &&
+      Boolean(r.form.date) &&
+      typeof r.form.odometer === 'number' &&
+      Number.isFinite(r.form.odometer) &&
+      r.form.odometer >= 0 &&
+      typeof r.form.cost === 'number' &&
+      Number.isFinite(r.form.cost) &&
+      r.form.cost > 0 &&
+      typeof r.form.description === 'string' &&
+      Boolean(r.form.description.trim()) &&
+      req.every((name) => (r.form.extraFields ?? []).some((ef) => ef.name === name && ef.value.trim()))
+    )
+  }
 
-  async function onSubmit() {
+  async function onSubmitRecord(id: string) {
     if (!cfg) return
-    if (!draft.vehicleId) return
-    if (!selectedRecordType) return
-    if (!canSubmit) {
-      setError('Please confirm record type, date, odometer, description, cost, and required extra fields.')
-      return
-    }
     if (!draft.document) {
       setError('Please select a document.')
+      return
+    }
+    const rec = (draft.records ?? []).find((r) => r.id === id)
+    if (!rec) return
+    if (!recordCanSubmit(rec)) {
+      setError('Please confirm vehicle, record type, date, odometer, description, cost, and required extra fields.')
       return
     }
 
@@ -374,29 +392,53 @@ export default function NewServiceRecordPage() {
     try {
       const file = new File([draft.document.blob], draft.document.name, { type: draft.document.type || undefined })
       const uploaded = draft.uploadedFiles?.length ? draft.uploadedFiles : await uploadDocuments(cfg, [file])
+      if (!draft.uploadedFiles?.length) setDraft((d) => ({ ...d, uploadedFiles: uploaded }))
+
+      setDraft((d) => ({
+        ...d,
+        records: (d.records ?? []).map((r) =>
+          r.id === id ? { ...r, status: 'submitting' as const, submitError: undefined } : r,
+        ),
+      }))
 
       const res = await addServiceLikeRecord(cfg, {
-        recordType: selectedRecordType,
-        vehicleId: draft.vehicleId,
-        dateMMDDYYYY: toMMDDYYYY(form.date!),
-        odometer: form.odometer!,
-        description: form.description!.trim(),
-        cost: form.cost!,
-        notes: form.notes?.trim() ? form.notes.trim() : undefined,
-        tags: form.tags?.trim() ? form.tags.trim() : undefined,
-        extraFields: (form.extraFields ?? []).filter((x) => x.name.trim() && x.value.trim()),
+        recordType: rec.form.recordType!,
+        vehicleId: rec.form.vehicleId!,
+        dateMMDDYYYY: toMMDDYYYY(rec.form.date!),
+        odometer: rec.form.odometer!,
+        description: rec.form.description!.trim(),
+        cost: rec.form.cost!,
+        notes: rec.form.notes?.trim() ? rec.form.notes.trim() : undefined,
+        tags: rec.form.tags?.trim() ? rec.form.tags.trim() : undefined,
+        extraFields: (rec.form.extraFields ?? []).filter((x) => x.name.trim() && x.value.trim()),
         files: uploaded,
       })
 
-      await clearServiceDraft()
-      vehicleTouched.current = false
-      recordTypeTouched.current = false
-      setDraft({ date: todayISODate(), form: { extraFields: [] } })
-      lastExtractSigRef.current = ''
-      setSuccessOpen(true)
+      console.log('Submitted', res)
+      let allSubmitted = false
+      setDraft((d) => {
+        const nextRecords = (d.records ?? []).map((r) =>
+          r.id === id ? { ...r, status: 'submitted' as const, submitError: undefined } : r,
+        )
+        allSubmitted = nextRecords.length > 0 && nextRecords.every((r) => r.status === 'submitted')
+        return { ...d, records: nextRecords }
+      })
+
+      if (allSubmitted) {
+        await clearServiceDraft()
+        vehicleTouched.current = false
+        setDraft({ date: todayISODate() })
+        lastExtractSigRef.current = ''
+        setSuccessOpen(true)
+      }
       console.log('Submitted', res)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(msg)
+      setDraft((d) => ({
+        ...d,
+        records: (d.records ?? []).map((r) => (r.id === id ? { ...r, status: 'failed' as const, submitError: msg } : r)),
+      }))
     } finally {
       setSubmitBusy(false)
     }
@@ -577,13 +619,13 @@ export default function NewServiceRecordPage() {
           <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
             <button
               className="btn small"
-              disabled={!canExtract || extractBusy || submitBusy}
+              disabled={!canExtractAny || extractBusy || submitBusy}
               onClick={() => {
                 setExtractFailed(false)
                 setExtractMessage(null)
                 lastExtractSigRef.current = ''
                 setForceExtractTick((n) => n + 1)
-                setDraft((d) => ({ ...d, extracted: undefined }))
+                setDraft((d) => ({ ...d, extracted: undefined, records: undefined }))
               }}
               type="button"
               aria-label="Retry extraction"
@@ -609,183 +651,245 @@ export default function NewServiceRecordPage() {
           </div>
         ) : null}
 
-        <div className="grid two no-collapse">
-          <div className="field">
-            <label>Record type</label>
-            <select
-              value={selectedRecordType ?? ''}
-              onChange={(e) => {
-                recordTypeTouched.current = true
-                const v = e.target.value as ServiceLikeRecordType
-                setDraft((d) => ({ ...d, form: { ...(d.form ?? { extraFields: [] }), recordType: v } }))
-              }}
-              disabled={!step1Done || submitBusy}
-            >
-              <option value="" disabled>
-                Select…
-              </option>
-              <option value="service">Service</option>
-              <option value="repair">Repair</option>
-              <option value="upgrade">Upgrade</option>
-            </select>
-          </div>
-          <div className="field">
-            <label>Date</label>
-            <input
-              type="date"
-              value={form.date ?? draft.date}
-              onChange={(e) => setDraft((d) => ({ ...d, form: { ...(d.form ?? { extraFields: [] }), date: e.target.value } }))}
-              disabled={submitBusy}
-            />
-          </div>
-        </div>
+        {!hasRecords ? <div className="muted">No extracted records yet.</div> : null}
 
-        <div className="field">
-          <label>Odometer</label>
-          <input
-            inputMode="numeric"
-            value={numberOrEmpty(form.odometer)}
-            onChange={(e) => {
-              const n = Number(e.target.value)
-              setDraft((d) => ({ ...d, form: { ...(d.form ?? { extraFields: [] }), odometer: Number.isFinite(n) ? n : undefined } }))
-            }}
-            disabled={submitBusy}
-          />
-        </div>
+        {(draft.records ?? []).map((r, idx) => {
+          const required = requiredExtraFieldsFor(r.form.recordType)
+          const canSubmit = recordCanSubmit(r)
+          const datalistId = `extra-field-names-${r.id}`
+          const isSubmitted = r.status === 'submitted'
+          return (
+            <div key={r.id} className="card stack" style={{ padding: 14 }}>
+              <div className="row">
+                <strong>Record {idx + 1}</strong>
+                {isSubmitted ? <DoneIcon /> : <span className="muted">{r.status === 'failed' ? 'Needs attention' : 'Pending'}</span>}
+              </div>
 
-        <div className="field">
-          <label>Description</label>
-          <input
-            value={form.description ?? ''}
-            onChange={(e) => setDraft((d) => ({ ...d, form: { ...(d.form ?? { extraFields: [] }), description: e.target.value } }))}
-            disabled={submitBusy}
-          />
-        </div>
+              {r.submitError ? (
+                <div className="error" style={{ whiteSpace: 'pre-wrap' }}>
+                  {r.submitError}
+                </div>
+              ) : null}
 
-        <div className="grid two no-collapse">
-          <div className="field">
-            <label>Total cost</label>
-            <input
-              inputMode="decimal"
-              value={numberOrEmpty(form.cost)}
-              onChange={(e) => {
-                const n = Number(e.target.value)
-                setDraft((d) => ({ ...d, form: { ...(d.form ?? { extraFields: [] }), cost: Number.isFinite(n) ? n : undefined } }))
-              }}
-              disabled={submitBusy}
-            />
-          </div>
-          <div className="field">
-            <label>Tags (optional)</label>
-            <input
-              value={form.tags ?? ''}
-              onChange={(e) => setDraft((d) => ({ ...d, form: { ...(d.form ?? { extraFields: [] }), tags: e.target.value } }))}
-              disabled={submitBusy}
-              placeholder="oilchange tires …"
-            />
-          </div>
-        </div>
+              <div className="field">
+                <label>Vehicle</label>
+                <select
+                  value={typeof r.form.vehicleId === 'number' ? String(r.form.vehicleId) : ''}
+                  onChange={(e) => {
+                    updateRecord(r.id, (prev) => ({
+                      ...prev,
+                      vehicleTouched: true,
+                      form: { ...prev.form, vehicleId: Number(e.target.value) },
+                    }))
+                  }}
+                  disabled={submitBusy || isSubmitted}
+                >
+                  <option value="" disabled>
+                    Select…
+                  </option>
+                  {vehicles.map((v) => (
+                    <option key={v.id} value={String(v.id)}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-        <div className="field">
-          <label>Notes (optional)</label>
-          <textarea
-            rows={2}
-            value={form.notes ?? ''}
-            onChange={(e) => setDraft((d) => ({ ...d, form: { ...(d.form ?? { extraFields: [] }), notes: e.target.value } }))}
-            disabled={submitBusy}
-          />
-        </div>
-
-        <div className="card stack" style={{ padding: 14 }}>
-          <div className="row">
-            <strong>Extra fields</strong>
-            <button
-              className="btn small"
-              type="button"
-              onClick={() => {
-                const next = [...(form.extraFields ?? []), { name: '', value: '' } satisfies ExtraFieldValue]
-                setDraft((d) => ({ ...d, form: { ...(d.form ?? {}), extraFields: next } }))
-              }}
-              disabled={submitBusy}
-            >
-              Add
-            </button>
-          </div>
-          {(form.extraFields ?? []).length === 0 ? <div className="muted">None</div> : null}
-          {(form.extraFields ?? []).map((ef, idx) => {
-            const required = requiredExtraFields.includes(ef.name)
-            const missingRequired = required && !ef.value.trim()
-            return (
-              <div key={idx} className="grid two no-collapse" style={{ alignItems: 'flex-end' }}>
+              <div className="grid two no-collapse">
                 <div className="field">
-                  <label>{required ? `Name (required)` : 'Name'}</label>
-                  <input
-                    value={ef.name}
+                  <label>Record type</label>
+                  <select
+                    value={r.form.recordType ?? ''}
                     onChange={(e) => {
-                      const next = (form.extraFields ?? []).slice()
-                      next[idx] = { ...ef, name: e.target.value }
-                      setDraft((d) => ({ ...d, form: { ...(d.form ?? {}), extraFields: next } }))
+                      updateRecord(r.id, (prev) => ({
+                        ...prev,
+                        recordTypeTouched: true,
+                        form: { ...prev.form, recordType: e.target.value as ServiceLikeRecordType },
+                      }))
                     }}
-                    disabled={submitBusy}
-                    list="extra-field-names"
+                    disabled={submitBusy || isSubmitted}
+                  >
+                    <option value="" disabled>
+                      Select…
+                    </option>
+                    <option value="service">Service</option>
+                    <option value="repair">Repair</option>
+                    <option value="upgrade">Upgrade</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label>Date</label>
+                  <input
+                    type="date"
+                    value={r.form.date ?? draft.date}
+                    onChange={(e) => updateRecord(r.id, (prev) => ({ ...prev, form: { ...prev.form, date: e.target.value } }))}
+                    disabled={submitBusy || isSubmitted}
+                  />
+                </div>
+              </div>
+
+              <div className="field">
+                <label>Odometer</label>
+                <input
+                  inputMode="numeric"
+                  value={numberOrEmpty(r.form.odometer)}
+                  onChange={(e) => {
+                    const n = Number(e.target.value)
+                    updateRecord(r.id, (prev) => ({ ...prev, form: { ...prev.form, odometer: Number.isFinite(n) ? n : undefined } }))
+                  }}
+                  disabled={submitBusy || isSubmitted}
+                />
+              </div>
+
+              <div className="field">
+                <label>Description</label>
+                <input
+                  value={r.form.description ?? ''}
+                  onChange={(e) => updateRecord(r.id, (prev) => ({ ...prev, form: { ...prev.form, description: e.target.value } }))}
+                  disabled={submitBusy || isSubmitted}
+                />
+              </div>
+
+              <div className="grid two no-collapse">
+                <div className="field">
+                  <label>Total cost</label>
+                  <input
+                    inputMode="decimal"
+                    value={numberOrEmpty(r.form.cost)}
+                    onChange={(e) => {
+                      const n = Number(e.target.value)
+                      updateRecord(r.id, (prev) => ({ ...prev, form: { ...prev.form, cost: Number.isFinite(n) ? n : undefined } }))
+                    }}
+                    disabled={submitBusy || isSubmitted}
                   />
                 </div>
                 <div className="field">
-                  <label>{missingRequired ? 'Value (required)' : 'Value'}</label>
+                  <label>Tags (optional)</label>
                   <input
-                    value={ef.value}
-                    onChange={(e) => {
-                      const next = (form.extraFields ?? []).slice()
-                      next[idx] = { ...ef, value: e.target.value }
-                      setDraft((d) => ({ ...d, form: { ...(d.form ?? {}), extraFields: next } }))
-                    }}
-                    disabled={submitBusy}
+                    value={r.form.tags ?? ''}
+                    onChange={(e) => updateRecord(r.id, (prev) => ({ ...prev, form: { ...prev.form, tags: e.target.value } }))}
+                    disabled={submitBusy || isSubmitted}
+                    placeholder="oilchange tires …"
                   />
                 </div>
-                <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
+              </div>
+
+              <div className="field">
+                <label>Notes (optional)</label>
+                <textarea
+                  rows={2}
+                  value={r.form.notes ?? ''}
+                  onChange={(e) => updateRecord(r.id, (prev) => ({ ...prev, form: { ...prev.form, notes: e.target.value } }))}
+                  disabled={submitBusy || isSubmitted}
+                />
+              </div>
+
+              <div className="card stack" style={{ padding: 14 }}>
+                <div className="row">
+                  <strong>Extra fields</strong>
                   <button
                     className="btn small"
                     type="button"
                     onClick={() => {
-                      const next = (form.extraFields ?? []).slice()
-                      next.splice(idx, 1)
-                      setDraft((d) => ({ ...d, form: { ...(d.form ?? {}), extraFields: next } }))
+                      updateRecord(r.id, (prev) => ({
+                        ...prev,
+                        form: { ...prev.form, extraFields: [...(prev.form.extraFields ?? []), { name: '', value: '' }] },
+                      }))
                     }}
-                    disabled={submitBusy}
-                    aria-label="Remove extra field"
-                    title="Remove"
+                    disabled={submitBusy || isSubmitted}
                   >
-                    Remove
+                    Add
                   </button>
                 </div>
+                {(r.form.extraFields ?? []).length === 0 ? <div className="muted">None</div> : null}
+                {(r.form.extraFields ?? []).map((ef, efIdx) => {
+                  const isReq = required.includes(ef.name)
+                  const missingRequired = isReq && !ef.value.trim()
+                  return (
+                    <div key={efIdx} className="grid two no-collapse" style={{ alignItems: 'flex-end' }}>
+                      <div className="field">
+                        <label>{isReq ? `Name (required)` : 'Name'}</label>
+                        <input
+                          value={ef.name}
+                          onChange={(e) => {
+                            updateRecord(r.id, (prev) => {
+                              const next = (prev.form.extraFields ?? []).slice()
+                              next[efIdx] = { ...ef, name: e.target.value }
+                              return { ...prev, form: { ...prev.form, extraFields: next } }
+                            })
+                          }}
+                          disabled={submitBusy || isSubmitted}
+                          list={datalistId}
+                        />
+                      </div>
+                      <div className="field">
+                        <label>{missingRequired ? 'Value (required)' : 'Value'}</label>
+                        <input
+                          value={ef.value}
+                          onChange={(e) => {
+                            updateRecord(r.id, (prev) => {
+                              const next = (prev.form.extraFields ?? []).slice()
+                              next[efIdx] = { ...ef, value: e.target.value }
+                              return { ...prev, form: { ...prev.form, extraFields: next } }
+                            })
+                          }}
+                          disabled={submitBusy || isSubmitted}
+                        />
+                      </div>
+                      <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
+                        <button
+                          className="btn small"
+                          type="button"
+                          onClick={() => {
+                            updateRecord(r.id, (prev) => {
+                              const next = (prev.form.extraFields ?? []).slice()
+                              next.splice(efIdx, 1)
+                              return { ...prev, form: { ...prev.form, extraFields: next } }
+                            })
+                          }}
+                          disabled={submitBusy || isSubmitted}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+                <datalist id={datalistId}>
+                  {(r.form.recordType
+                    ? extraFieldNamesByRecordType[mappedRecordType(r.form.recordType)] ?? []
+                    : []
+                  ).map((n) => (
+                    <option key={n} value={n} />
+                  ))}
+                </datalist>
               </div>
-            )
-          })}
-          <datalist id="extra-field-names">
-            {(selectedRecordType
-              ? extraFieldNamesByRecordType[selectedRecordType === 'repair' ? 'RepairRecord' : selectedRecordType === 'upgrade' ? 'UpgradeRecord' : 'ServiceRecord'] ?? []
-              : []
-            ).map((n) => (
-              <option key={n} value={n} />
-            ))}
-          </datalist>
-        </div>
+
+              <div className="actions">
+                <button
+                  className="btn primary"
+                  disabled={!canSubmit || submitBusy || extractBusy || docBusy || isSubmitted}
+                  onClick={() => onSubmitRecord(r.id)}
+                  type="button"
+                >
+                  {r.status === 'submitting' ? 'Submitting…' : isSubmitted ? 'Submitted' : 'Submit to LubeLogger'}
+                </button>
+              </div>
+            </div>
+          )
+        })}
 
         <div className="actions">
-          <button className="btn primary" disabled={!canSubmit || submitBusy || extractBusy} onClick={onSubmit} type="button">
-            {submitBusy ? 'Submitting…' : 'Submit to LubeLogger'}
-          </button>
           <button
             className="btn"
             disabled={submitBusy || extractBusy || docBusy}
             onClick={async () => {
               await clearServiceDraft()
               vehicleTouched.current = false
-              recordTypeTouched.current = false
               lastExtractSigRef.current = ''
               setExtractFailed(false)
               setExtractMessage(null)
-              setDraft({ date: todayISODate(), form: { extraFields: [] } })
+              setDraft({ date: todayISODate() })
             }}
             type="button"
           >

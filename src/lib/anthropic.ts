@@ -1,5 +1,5 @@
 import { ExtractionSchema, parseJsonFromText } from './extraction'
-import { ServiceExtractionSchema } from './serviceExtraction'
+import { ServiceExtractionResultSchema } from './serviceExtraction'
 
 async function blobToBase64(blob: Blob): Promise<string> {
   const arrayBuffer = await blob.arrayBuffer()
@@ -119,19 +119,25 @@ export async function extractServiceFromDocumentAnthropic(params: {
     : '(not provided)'
 
   const prompt = `
-You will be given a vehicle service invoice/receipt as text and/or images.
+ You will be given a vehicle service invoice/receipt as text and/or images.
 
-Return JSON ONLY matching this TypeScript type:
-{
-  "recordType": "service" | "repair" | "upgrade" | null,
-  "vehicleId": number | null,
-  "date": string | null,          // yyyy-mm-dd (preferred). If unknown, null.
-  "odometer": number | null,      // integer miles/km
-  "description": string | null,   // short description of work performed
-  "totalCost": number | null,     // total paid/total due (prefer final total)
-  "notes"?: string | null,
-  "tags"?: string | null,         // space-separated tags if obvious, else null/omit
-  "extraFields"?: { "name": string, "value": string }[] | null,
+ Your job is to create a sensible set of LubeLogger records from this document.
+ This is NOT necessarily one record per line item: group logically into records that represent one service event/visit.
+
+ Return JSON ONLY matching this TypeScript type:
+ {
+  "records": Array<{
+    "recordType": "service" | "repair" | "upgrade" | null,
+    "vehicleId": number | null,
+    "date": string | null,
+    "odometer": number | null,
+    "description": string | null,
+    "totalCost": number | null,
+    "notes"?: string | null,
+    "tags"?: string | null,
+    "extraFields"?: { "name": string, "value": string }[] | null,
+    "explanation"?: string | null
+  }>,
   "explanation"?: string | null
 }
 
@@ -148,6 +154,8 @@ Rules:
 - Return only valid JSON (no markdown, no backticks).
 - Use '.' as decimal separator.
 - If you choose a recordType, choose the one that best matches the work (service=scheduled maintenance, repair=unplanned fix, upgrade=enhancement).
+- Create between 1 and 8 records; prefer fewer records unless there are clearly distinct visits/dates/vehicles.
+- Do not produce a record for every part; instead summarize parts/labor into a single description per visit/event.
 - If you cannot determine a value, set it to null and briefly explain why in explanation.
 `.trim()
 
@@ -203,8 +211,7 @@ Rules:
   if (!joined) throw new Error(`Anthropic did not return text: ${text}`)
 
   const json = parseJsonFromText(joined, 'Anthropic did not return JSON')
-  const parsed = ServiceExtractionSchema.safeParse(json)
+  const parsed = ServiceExtractionResultSchema.safeParse(json)
   if (!parsed.success) throw new Error(`Anthropic response did not match schema: ${joined}`)
   return { ...parsed.data, rawJson: json }
 }
-
