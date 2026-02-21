@@ -147,6 +147,11 @@ export default function SettingsPage() {
       setTestResult(null)
     } catch (e) {
       setConnectedAs(null)
+      const isAbort = e instanceof Error && e.name === 'AbortError'
+      if (isAbort) {
+        setTestResult('Timeout: could not connect to LubeLogger. Check your connection and try again.')
+        return
+      }
       let noCorsProbe: string | null = null
       const isFailedToFetch =
         e instanceof Error && e.name === 'TypeError' && /failed to fetch/i.test(e.message ?? '')
