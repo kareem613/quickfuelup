@@ -69,6 +69,34 @@ function RefreshIcon() {
   )
 }
 
+function CameraIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M7 7h3l1-2h2l1 2h3a2 2 0 0 1 2 2v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V9a2 2 0 0 1 2-2Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  )
+}
+
+function FileIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M8 3h6l4 4v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path d="M14 3v5h5" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export default function NewEntryPage() {
   // Avoid re-loading config object every render (prevents effect loops).
   const cfg = useMemo(() => loadConfig(), [])
@@ -87,7 +115,6 @@ export default function NewEntryPage() {
   const lastExtractSigRef = useRef<string>('')
   const [successOpen, setSuccessOpen] = useState(false)
 
-  const [photoPickerKey, setPhotoPickerKey] = useState<null | 'pumpImage' | 'odometerImage'>(null)
   const pumpCameraInputRef = useRef<HTMLInputElement | null>(null)
   const pumpGalleryInputRef = useRef<HTMLInputElement | null>(null)
   const odoCameraInputRef = useRef<HTMLInputElement | null>(null)
@@ -172,25 +199,6 @@ export default function NewEntryPage() {
     } finally {
       setImageBusy(false)
     }
-  }
-
-  function openPhotoPicker(key: 'pumpImage' | 'odometerImage') {
-    setPhotoPickerKey(key)
-  }
-
-  function clickPhotoPicker(mode: 'camera' | 'gallery') {
-    const key = photoPickerKey
-    if (!key) return
-    const ref =
-      key === 'pumpImage'
-        ? mode === 'camera'
-          ? pumpCameraInputRef
-          : pumpGalleryInputRef
-        : mode === 'camera'
-          ? odoCameraInputRef
-          : odoGalleryInputRef
-    setPhotoPickerKey(null)
-    ref.current?.click()
   }
 
   const canExtract = Boolean(draft.vehicleId && draft.pumpImage && draft.odometerImage)
@@ -464,34 +472,37 @@ export default function NewEntryPage() {
         </button>
         {step2Done && !card2Open ? null : (
           <>
-            <button
-              className={`image-preview clickable${!step1Done || submitBusy ? ' disabled' : ''}`}
-              style={{ padding: 0 }}
-              aria-disabled={!step1Done || submitBusy}
-              disabled={!step1Done || submitBusy}
-              type="button"
-              onClick={() => openPhotoPicker('pumpImage')}
-            >
+            <div className={`image-preview clickable split${!step1Done || submitBusy ? ' disabled' : ''}`}>
               {pumpUrl ? (
                 <>
                   <img src={pumpUrl} alt="Pump preview" />
-                  <div className="image-overlay">Tap to replace</div>
                 </>
               ) : (
                 <div className="image-placeholder">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path
-                      d="M7 7h3l1-2h2l1 2h3a2 2 0 0 1 2 2v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V9a2 2 0 0 1 2-2Z"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      strokeLinejoin="round"
-                    />
-                    <path d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" stroke="currentColor" strokeWidth="1.6" />
-                  </svg>
-                  <div>{draft.pumpImage ? 'Replace pump photo' : 'Tap to choose pump photo'}</div>
+                  <div>{draft.pumpImage ? 'Replace pump photo' : 'Add pump photo'}</div>
                 </div>
               )}
-            </button>
+              <div className="image-split-overlay" aria-hidden="true">
+                <button
+                  className="image-split-btn"
+                  type="button"
+                  onClick={() => pumpCameraInputRef.current?.click()}
+                  disabled={!step1Done || submitBusy}
+                >
+                  <CameraIcon />
+                  <div>Camera</div>
+                </button>
+                <button
+                  className="image-split-btn"
+                  type="button"
+                  onClick={() => pumpGalleryInputRef.current?.click()}
+                  disabled={!step1Done || submitBusy}
+                >
+                  <FileIcon />
+                  <div>Files</div>
+                </button>
+              </div>
+            </div>
             <input
               ref={pumpCameraInputRef}
               className="sr-only"
@@ -533,18 +544,10 @@ export default function NewEntryPage() {
         </button>
         {step3Done && !card3Open ? null : (
           <>
-            <button
-              className={`image-preview clickable${!step1Done || !step2Done || submitBusy ? ' disabled' : ''}`}
-              style={{ padding: 0 }}
-              aria-disabled={!step1Done || !step2Done || submitBusy}
-              disabled={!step1Done || !step2Done || submitBusy}
-              type="button"
-              onClick={() => openPhotoPicker('odometerImage')}
-            >
+            <div className={`image-preview clickable split${!step1Done || !step2Done || submitBusy ? ' disabled' : ''}`}>
               {odoUrl ? (
                 <>
                   <img src={odoUrl} alt="Odometer preview" />
-                  <div className="image-overlay">Tap to replace</div>
                 </>
               ) : (
                 <div className="image-placeholder">
@@ -562,10 +565,30 @@ export default function NewEntryPage() {
                       strokeLinecap="round"
                     />
                   </svg>
-                  <div>{draft.odometerImage ? 'Replace odometer photo' : 'Tap to choose odometer photo'}</div>
+                  <div>{draft.odometerImage ? 'Replace odometer photo' : 'Add odometer photo'}</div>
                 </div>
               )}
-            </button>
+              <div className="image-split-overlay" aria-hidden="true">
+                <button
+                  className="image-split-btn"
+                  type="button"
+                  onClick={() => odoCameraInputRef.current?.click()}
+                  disabled={!step1Done || !step2Done || submitBusy}
+                >
+                  <CameraIcon />
+                  <div>Camera</div>
+                </button>
+                <button
+                  className="image-split-btn"
+                  type="button"
+                  onClick={() => odoGalleryInputRef.current?.click()}
+                  disabled={!step1Done || !step2Done || submitBusy}
+                >
+                  <FileIcon />
+                  <div>Files</div>
+                </button>
+              </div>
+            </div>
             <input
               ref={odoCameraInputRef}
               className="sr-only"
@@ -747,26 +770,6 @@ export default function NewEntryPage() {
 
       {imageBusy || extractBusy ? (
         <div className="muted">{imageBusy ? 'Processing images…' : 'Extracting from photos…'}</div>
-      ) : null}
-
-      {photoPickerKey ? (
-        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Choose photo source" onClick={() => setPhotoPickerKey(null)}>
-          <div className="modal card stack" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: 0 }}>Add photo</h3>
-            <div className="muted">Choose how you want to add the photo.</div>
-            <div className="actions">
-              <button className="btn" type="button" onClick={() => clickPhotoPicker('camera')}>
-                Take photo
-              </button>
-              <button className="btn" type="button" onClick={() => clickPhotoPicker('gallery')}>
-                Choose existing
-              </button>
-            </div>
-            <button className="btn" type="button" onClick={() => setPhotoPickerKey(null)}>
-              Cancel
-            </button>
-          </div>
-        </div>
       ) : null}
     </div>
   )
