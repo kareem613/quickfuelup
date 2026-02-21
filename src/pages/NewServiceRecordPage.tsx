@@ -312,8 +312,8 @@ export default function NewServiceRecordPage() {
       card3Touched.current = false
       return
     }
-    if (!card3Touched.current) setCard3Open(false)
-  }, [step3Done])
+    if (!card3Touched.current) setCard3Open(anyVehicleIdWarning)
+  }, [anyVehicleIdWarning, step3Done])
 
   const canExtractAny = Boolean(cfg && draft.document && providersWithKeys.length && (draft.documentImages?.length || draft.documentText))
 
