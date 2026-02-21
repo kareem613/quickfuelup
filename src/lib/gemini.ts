@@ -146,8 +146,13 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
  - Do not produce a record for every part.
  - Keep "description" VERY concise (2-6 words). Put the detailed work performed (parts/labor/steps) in "notes".
    Example: description="AC repair", notes="Evacuated/recharged system; replaced condenser; replaced O-rings; leak test; added dye."
- - Cost sanity: if the invoice has a clear overall total, allocate per-record "totalCost" values so that the SUM of all record totalCost values matches the invoice total as closely as possible.
-   If you cannot confidently allocate costs per record, keep the records but set some totalCost to null and explain the mismatch/uncertainty in "explanation".
+ - Cost math (do this when the invoice is itemized and shows subtotal/tax/total):
+   - Treat EVERY charge as a line item amount that must be counted: parts, labor, fees, shop supplies, discounts/credits (negative), etc.
+   - Assign each line item to exactly one record (based on your logical grouping), then compute each record's pre-tax subtotal by summing its line items (parts + labor + fees).
+   - Make sure the SUM of all record pre-tax subtotals matches the invoice SUBTOTAL (pre-tax). If the invoice subtotal doesn't match the sum of itemized lines, mention it in "explanation".
+   - If the invoice shows tax amount and/or tax rate, allocate tax across records proportionally by each record's pre-tax subtotal, round to cents, and adjust the final record by any rounding remainder so totals match.
+   - Set each record's "totalCost" to (record pre-tax subtotal + allocated tax, if any). Ensure the SUM of all record totalCost values matches the invoice TOTAL as closely as possible.
+   - If you cannot confidently allocate costs per record, keep the records but set some totalCost to null and explain the uncertainty in "explanation".
  - If you cannot determine a value, set it to null and briefly explain why in explanation.
 `.trim()
 
