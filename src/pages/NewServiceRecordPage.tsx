@@ -398,7 +398,35 @@ export default function NewServiceRecordPage() {
                 }
               : extracted
 
-          const records: ServiceDraftRecord[] = cleanedExtracted.records.map((r, idx) => {
+          const shouldWarnVehicle = Boolean(
+            anySuggestedVehicle &&
+              (!vehicleTouched.current || (typeof currentVehicleId === 'number' && currentVehicleId !== anySuggestedVehicle)),
+          )
+
+          const baseWarnings = cleanedExtracted.warnings ?? []
+          const warnings =
+            shouldWarnVehicle && cleanedExtracted.records.length
+              ? (() => {
+                  const next = baseWarnings.slice()
+                  for (let i = 0; i < cleanedExtracted.records.length; i++) {
+                    const path = `/records/${i}/vehicleId`
+                    if (next.some((w) => w.path === path)) continue
+                    next.push({
+                      path,
+                      reason: typeof currentVehicleId === 'number' && currentVehicleId !== anySuggestedVehicle ? 'conflict' : 'guessed',
+                      message:
+                        typeof currentVehicleId === 'number' && currentVehicleId !== anySuggestedVehicle
+                          ? 'Vehicle differs from your selection; please confirm.'
+                          : 'Vehicle was selected automatically; please confirm.',
+                    })
+                  }
+                  return next
+                })()
+              : baseWarnings
+
+          const extractedWithWarnings = shouldWarnVehicle ? { ...cleanedExtracted, warnings } : cleanedExtracted
+
+          const records: ServiceDraftRecord[] = extractedWithWarnings.records.map((r, idx) => {
             const vehicleId =
               typeof r.vehicleId === 'number' && vehicles.some((v) => v.id === r.vehicleId) ? r.vehicleId : baseVehicleId
             const iso = normalizeToISODate(r.date)
@@ -424,7 +452,7 @@ export default function NewServiceRecordPage() {
             ...d,
             // If the LLM suggests a different vehicle, prefer it over the current selection.
             vehicleId: baseVehicleId ?? d.vehicleId,
-            extracted: cleanedExtracted,
+            extracted: extractedWithWarnings,
             records,
           }
         })
