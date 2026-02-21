@@ -39,6 +39,16 @@ export async function getVehicles(cfg: AppConfig): Promise<Vehicle[]> {
       const obj = v as Record<string, unknown>
       const id = Number(obj.id)
       if (!Number.isFinite(id)) return null
+
+      // LubeLogger vehicles have SoldDate (empty when active). Hide sold vehicles from pickers.
+      const soldDate =
+        typeof obj.soldDate === 'string'
+          ? obj.soldDate
+          : typeof obj.SoldDate === 'string'
+            ? obj.SoldDate
+            : ''
+      if (soldDate.trim()) return null
+
       const byName = obj.name ?? obj.description
       const year = typeof obj.year === 'number' ? obj.year : Number(obj.year)
       const make = typeof obj.make === 'string' ? obj.make : undefined
