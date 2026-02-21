@@ -325,6 +325,24 @@ export default function NewServiceRecordPage() {
     }))
   }
 
+  function updateRecordAndClearWarnings(params: {
+    id: string
+    clearPaths: string[]
+    fn: (r: ServiceDraftRecord) => ServiceDraftRecord
+  }) {
+    setDraft((d) => {
+      const extracted =
+        d.extracted?.warnings?.length && params.clearPaths.length
+          ? { ...d.extracted, warnings: d.extracted.warnings.filter((w) => !params.clearPaths.includes(w.path)) }
+          : d.extracted
+      return {
+        ...d,
+        extracted,
+        records: (d.records ?? []).map((r) => (r.id === params.id ? params.fn(r) : r)),
+      }
+    })
+  }
+
   useEffect(() => {
     if (!cfg) return
     if (!draft.document) return
@@ -361,9 +379,18 @@ export default function NewServiceRecordPage() {
           .map((r) => r.vehicleId)
           .find((id) => typeof id === 'number' && vehicles.some((v) => v.id === id))
 
-        const baseVehicleId = (!vehicleTouched.current && anySuggestedVehicle ? anySuggestedVehicle : draft.vehicleId) ?? null
+        const baseVehicleId =
+          (anySuggestedVehicle && typeof draft.vehicleId === 'number' && draft.vehicleId !== anySuggestedVehicle
+            ? anySuggestedVehicle
+            : (!vehicleTouched.current && anySuggestedVehicle ? anySuggestedVehicle : draft.vehicleId)) ?? null
 
-        const records: ServiceDraftRecord[] = extracted.records.map((r, idx) => {
+        // If the LLM suggests the same vehicle the user already selected, treat vehicleId warnings as resolved/noise.
+        const cleanedExtracted =
+          anySuggestedVehicle && typeof draft.vehicleId === 'number' && draft.vehicleId === anySuggestedVehicle
+            ? { ...extracted, warnings: (extracted.warnings ?? []).filter((w) => !/^\/records\/\d+\/vehicleId$/.test(w.path)) }
+            : extracted
+
+        const records: ServiceDraftRecord[] = cleanedExtracted.records.map((r, idx) => {
           const vehicleId =
             typeof r.vehicleId === 'number' && vehicles.some((v) => v.id === r.vehicleId) ? r.vehicleId : baseVehicleId
           const iso = normalizeToISODate(r.date)
@@ -387,8 +414,9 @@ export default function NewServiceRecordPage() {
 
         setDraft((d) => ({
           ...d,
-          vehicleId: !vehicleTouched.current && anySuggestedVehicle ? anySuggestedVehicle : d.vehicleId,
-          extracted,
+          // If the LLM suggests a different vehicle, prefer it over the current selection.
+          vehicleId: baseVehicleId ?? d.vehicleId,
+          extracted: cleanedExtracted,
           records,
         }))
       } catch (e) {
@@ -756,6 +784,10 @@ export default function NewServiceRecordPage() {
                     setDraft((d) => ({
                       ...d,
                       vehicleId: v.id,
+                      extracted:
+                        d.extracted?.warnings?.length
+                          ? { ...d.extracted, warnings: d.extracted.warnings.filter((w) => !/^\/records\/\d+\/vehicleId$/.test(w.path)) }
+                          : d.extracted,
                       records: (d.records ?? []).map((r) =>
                         typeof r.form.vehicleId === 'number' ? r : { ...r, form: { ...r.form, vehicleId: v.id } },
                       ),
@@ -828,11 +860,15 @@ export default function NewServiceRecordPage() {
                   <select
                     value={r.form.recordType ?? ''}
                     onChange={(e) => {
-                      updateRecord(r.id, (prev) => ({
-                        ...prev,
-                        recordTypeTouched: true,
-                        form: { ...prev.form, recordType: e.target.value as ServiceLikeRecordType },
-                      }))
+                      updateRecordAndClearWarnings({
+                        id: r.id,
+                        clearPaths: [`/records/${idx}/recordType`],
+                        fn: (prev) => ({
+                          ...prev,
+                          recordTypeTouched: true,
+                          form: { ...prev.form, recordType: e.target.value as ServiceLikeRecordType },
+                        }),
+                      })
                     }}
                     disabled={submitBusy || isSubmitted}
                   >
@@ -849,7 +885,13 @@ export default function NewServiceRecordPage() {
                   <input
                     type="date"
                     value={r.form.date ?? draft.date}
-                    onChange={(e) => updateRecord(r.id, (prev) => ({ ...prev, form: { ...prev.form, date: e.target.value } }))}
+                    onChange={(e) =>
+                      updateRecordAndClearWarnings({
+                        id: r.id,
+                        clearPaths: [`/records/${idx}/date`],
+                        fn: (prev) => ({ ...prev, form: { ...prev.form, date: e.target.value } }),
+                      })
+                    }
                     disabled={submitBusy || isSubmitted}
                   />
                 </div>
@@ -862,7 +904,11 @@ export default function NewServiceRecordPage() {
                   value={numberOrEmpty(r.form.odometer)}
                   onChange={(e) => {
                     const n = Number(e.target.value)
-                    updateRecord(r.id, (prev) => ({ ...prev, form: { ...prev.form, odometer: Number.isFinite(n) ? n : undefined } }))
+                    updateRecordAndClearWarnings({
+                      id: r.id,
+                      clearPaths: [`/records/${idx}/odometer`],
+                      fn: (prev) => ({ ...prev, form: { ...prev.form, odometer: Number.isFinite(n) ? n : undefined } }),
+                    })
                   }}
                   disabled={submitBusy || isSubmitted}
                 />
@@ -872,7 +918,13 @@ export default function NewServiceRecordPage() {
                 <label>Description</label>
                 <input
                   value={r.form.description ?? ''}
-                  onChange={(e) => updateRecord(r.id, (prev) => ({ ...prev, form: { ...prev.form, description: e.target.value } }))}
+                  onChange={(e) =>
+                    updateRecordAndClearWarnings({
+                      id: r.id,
+                      clearPaths: [`/records/${idx}/description`],
+                      fn: (prev) => ({ ...prev, form: { ...prev.form, description: e.target.value } }),
+                    })
+                  }
                   disabled={submitBusy || isSubmitted}
                 />
               </div>
@@ -885,7 +937,11 @@ export default function NewServiceRecordPage() {
                     value={numberOrEmpty(r.form.cost)}
                     onChange={(e) => {
                       const n = Number(e.target.value)
-                      updateRecord(r.id, (prev) => ({ ...prev, form: { ...prev.form, cost: Number.isFinite(n) ? n : undefined } }))
+                      updateRecordAndClearWarnings({
+                        id: r.id,
+                        clearPaths: [`/records/${idx}/totalCost`],
+                        fn: (prev) => ({ ...prev, form: { ...prev.form, cost: Number.isFinite(n) ? n : undefined } }),
+                      })
                     }}
                     disabled={submitBusy || isSubmitted}
                   />
@@ -894,7 +950,13 @@ export default function NewServiceRecordPage() {
                   <label>Tags (optional)</label>
                   <input
                     value={r.form.tags ?? ''}
-                    onChange={(e) => updateRecord(r.id, (prev) => ({ ...prev, form: { ...prev.form, tags: e.target.value } }))}
+                    onChange={(e) =>
+                      updateRecordAndClearWarnings({
+                        id: r.id,
+                        clearPaths: [`/records/${idx}/tags`],
+                        fn: (prev) => ({ ...prev, form: { ...prev.form, tags: e.target.value } }),
+                      })
+                    }
                     disabled={submitBusy || isSubmitted}
                     placeholder="oilchange tires …"
                   />
@@ -906,7 +968,13 @@ export default function NewServiceRecordPage() {
                 <textarea
                   rows={2}
                   value={r.form.notes ?? ''}
-                  onChange={(e) => updateRecord(r.id, (prev) => ({ ...prev, form: { ...prev.form, notes: e.target.value } }))}
+                  onChange={(e) =>
+                    updateRecordAndClearWarnings({
+                      id: r.id,
+                      clearPaths: [`/records/${idx}/notes`],
+                      fn: (prev) => ({ ...prev, form: { ...prev.form, notes: e.target.value } }),
+                    })
+                  }
                   disabled={submitBusy || isSubmitted}
                 />
               </div>
