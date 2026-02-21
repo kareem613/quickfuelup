@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import TopNav from '../components/TopNav'
 import { loadConfig } from '../lib/config'
 import { toMMDDYYYY, todayISODate } from '../lib/date'
 import { clearDraft, loadDraft, saveDraft } from '../lib/draft'
@@ -10,6 +11,13 @@ import type { Draft, Vehicle } from '../lib/types'
 
 function numberOrEmpty(n: number | undefined) {
   return typeof n === 'number' && Number.isFinite(n) ? String(n) : ''
+}
+
+function splitVehicleName(name: string): { year?: string; model: string } {
+  const trimmed = name.trim()
+  const m = trimmed.match(/^(\d{4})\s+(.+)$/)
+  if (m) return { year: m[1], model: m[2] ?? trimmed }
+  return { model: trimmed }
 }
 
 function llmMessageFromGeminiError(e: unknown): string | null {
@@ -174,7 +182,7 @@ export default function NewEntryPage() {
       setError(null)
       setVehiclesLoadProblem(null)
       try {
-        const v = await withTimeout(getVehicles(cfg), 6000, 'Loading vehicles')
+        const v = await withTimeout(getVehicles(cfg, { includeSold: Boolean(cfg.showSoldVehicles) }), 6000, 'Loading vehicles')
         const existingDraft = await loadDraft()
         setVehicles(v)
         const initial =
@@ -237,6 +245,10 @@ export default function NewEntryPage() {
       .map((p) => ({
         provider: p,
         apiKey: p === 'anthropic' ? (cfg?.llm.anthropicApiKey ?? '') : (cfg?.llm.geminiApiKey ?? ''),
+        model:
+          p === 'anthropic'
+            ? (cfg?.llm.anthropicModelFuel ?? 'claude-haiku-4-5')
+            : (cfg?.llm.geminiModelFuel ?? 'gemini-2.5-flash'),
       }))
       .filter((p) => p.apiKey.trim())
   }, [cfg])
@@ -389,7 +401,7 @@ export default function NewEntryPage() {
   if (!cfg) {
     return (
       <div className="container stack">
-        <h2 style={{ margin: 0 }}>QuickFillUp</h2>
+        <TopNav />
         <div className="card stack">
           <div>Setup required.</div>
           <Link className="btn primary" to="/settings">
@@ -402,15 +414,7 @@ export default function NewEntryPage() {
 
   return (
     <div className="container stack">
-      <div className="row">
-        <div className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
-          <img src="/icons/ios/32.png" alt="" width={24} height={24} style={{ borderRadius: 6 }} />
-          <h2 style={{ margin: 0 }}>QuickFillUp</h2>
-        </div>
-        <Link to="/settings" className="muted">
-          Settings
-        </Link>
-      </div>
+      <TopNav />
 
       {error && <div className="error">{error}</div>}
       {vehiclesLoadProblem ? (
@@ -505,10 +509,18 @@ export default function NewEntryPage() {
                       }))
                     }}
                     disabled={submitBusy}
-                    type="button"
-                  >
-                    <div className="vehicle-name">{v.name}</div>
-                  </button>
+                  type="button"
+                >
+                  {(() => {
+                    const parts = splitVehicleName(v.name)
+                    return (
+                      <div className="vehicle-name">
+                        {parts.year ? <div className="vehicle-year">{parts.year}</div> : null}
+                        <div className="vehicle-model">{parts.model}</div>
+                      </div>
+                    )
+                  })()}
+                </button>
               )
             })}
           </div>

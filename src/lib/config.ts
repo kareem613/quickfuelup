@@ -24,6 +24,11 @@ export function loadConfig(): AppConfig | null {
           ? parsed.geminiApiKey
           : undefined
     const anthropicApiKey = typeof llmObj.anthropicApiKey === 'string' ? llmObj.anthropicApiKey : undefined
+    const geminiModelFuel = typeof llmObj.geminiModelFuel === 'string' ? llmObj.geminiModelFuel : undefined
+    const geminiModelService = typeof llmObj.geminiModelService === 'string' ? llmObj.geminiModelService : undefined
+    const anthropicModelFuel = typeof llmObj.anthropicModelFuel === 'string' ? llmObj.anthropicModelFuel : undefined
+    const anthropicModelService =
+      typeof llmObj.anthropicModelService === 'string' ? llmObj.anthropicModelService : undefined
 
     const providerOrderRaw = Array.isArray(llmObj.providerOrder) ? llmObj.providerOrder : null
     const providerOrderFromCfg = providerOrderRaw
@@ -51,11 +56,16 @@ export function loadConfig(): AppConfig | null {
       baseUrl: String(parsed.baseUrl).replace(/\/+$/, ''),
       lubeLoggerApiKey: String(parsed.lubeLoggerApiKey),
       cultureInvariant: parsed.cultureInvariant === undefined ? true : Boolean(parsed.cultureInvariant),
+      showSoldVehicles: Boolean((parsed as Record<string, unknown>).showSoldVehicles),
       useProxy: Boolean(parsed.useProxy),
       llm: {
         providerOrder,
         ...(geminiApiKey ? { geminiApiKey: String(geminiApiKey) } : null),
         ...(anthropicApiKey ? { anthropicApiKey: String(anthropicApiKey) } : null),
+        ...(geminiModelFuel?.trim() ? { geminiModelFuel: geminiModelFuel.trim() } : null),
+        ...(geminiModelService?.trim() ? { geminiModelService: geminiModelService.trim() } : null),
+        ...(anthropicModelFuel?.trim() ? { anthropicModelFuel: anthropicModelFuel.trim() } : null),
+        ...(anthropicModelService?.trim() ? { anthropicModelService: anthropicModelService.trim() } : null),
       },
     }
   } catch {

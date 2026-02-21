@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import TopNav from '../components/TopNav'
 import { loadConfig, saveConfig } from '../lib/config'
 import type { AppConfig, LlmProvider } from '../lib/types'
 import { getDeferredPrompt, isPwaInstallEnabled, isRunningStandalone, setDeferredPrompt, setPwaInstallEnabled } from '../lib/pwaInstall'
@@ -47,7 +48,21 @@ export default function SettingsPage() {
   })
   const [geminiApiKey, setGeminiApiKey] = useState(existing?.llm.geminiApiKey ?? '')
   const [anthropicApiKey, setAnthropicApiKey] = useState(existing?.llm.anthropicApiKey ?? '')
+  const [geminiModelFuel, setGeminiModelFuel] = useState(existing?.llm.geminiModelFuel ?? '')
+  const [geminiModelService, setGeminiModelService] = useState(existing?.llm.geminiModelService ?? '')
+  const [anthropicModelFuel, setAnthropicModelFuel] = useState(existing?.llm.anthropicModelFuel ?? '')
+  const [anthropicModelService, setAnthropicModelService] = useState(existing?.llm.anthropicModelService ?? '')
+  // Keep empty initially to avoid showing a "fake" list before the API-backed list arrives.
+  const [geminiModels, setGeminiModels] = useState<string[]>([])
+  const [anthropicModels, setAnthropicModels] = useState<string[]>([])
+  const [geminiModelsLoading, setGeminiModelsLoading] = useState(false)
+  const [anthropicModelsLoading, setAnthropicModelsLoading] = useState(false)
+  const lastGeminiModelsKeyRef = useRef<string>('')
+  const lastAnthropicModelsKeyRef = useRef<string>('')
+  const [openModelPicker, setOpenModelPicker] = useState<null | 'geminiFuel' | 'geminiService' | 'anthropicFuel' | 'anthropicService'>(null)
+  const closePickerTimer = useRef<number | null>(null)
   const [cultureInvariant, setCultureInvariant] = useState(existing?.cultureInvariant ?? true)
+  const [showSoldVehicles, setShowSoldVehicles] = useState(existing?.showSoldVehicles ?? false)
   const [testResult, setTestResult] = useState<string | null>(null)
   const [busyTest, setBusyTest] = useState(false)
   const [connectedAs, setConnectedAs] = useState<{ username: string; isAdmin: boolean } | null>(null)
@@ -81,14 +96,25 @@ export default function SettingsPage() {
           baseUrl: baseUrl.trim().replace(/\/+$/, ''),
           lubeLoggerApiKey: lubeLoggerApiKey.trim(),
           cultureInvariant,
+          showSoldVehicles,
           useProxy: false,
           llm: {
-          providerOrder: activeProviders,
-          ...(geminiApiKey.trim() ? { geminiApiKey: geminiApiKey.trim() } : null),
-          ...(anthropicApiKey.trim() ? { anthropicApiKey: anthropicApiKey.trim() } : null),
-          },
-        }
-      : null
+            providerOrder: activeProviders,
+            ...(geminiApiKey.trim() ? { geminiApiKey: geminiApiKey.trim() } : null),
+            ...(anthropicApiKey.trim() ? { anthropicApiKey: anthropicApiKey.trim() } : null),
+            ...(normalizeModelInput(geminiModelFuel) ? { geminiModelFuel: normalizeModelInput(geminiModelFuel) } : null),
+            ...(normalizeModelInput(geminiModelService)
+              ? { geminiModelService: normalizeModelInput(geminiModelService) }
+              : null),
+            ...(normalizeModelInput(anthropicModelFuel)
+              ? { anthropicModelFuel: normalizeModelInput(anthropicModelFuel) }
+              : null),
+            ...(normalizeModelInput(anthropicModelService)
+              ? { anthropicModelService: normalizeModelInput(anthropicModelService) }
+              : null),
+           },
+         }
+       : null
 
   function resolveWhoamiUrl() {
     if (!cfg) return null
@@ -211,6 +237,55 @@ export default function SettingsPage() {
     return p === 'anthropic' ? 'Anthropic' : 'Gemini'
   }
 
+  const DEFAULT_GEMINI_FUEL = 'gemini-2.5-flash'
+  const DEFAULT_GEMINI_SERVICE = 'gemini-2.5-pro'
+  const DEFAULT_ANTHROPIC_FUEL = 'claude-haiku-4-5'
+  const DEFAULT_ANTHROPIC_SERVICE = 'claude-sonnet-4-5'
+
+  const FALLBACK_GEMINI_MODELS = [
+    'gemini-2.5-pro',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-flash-latest',
+    'gemini-1.5-pro-latest',
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-pro',
+    'gemini-1.5-flash',
+  ] as const
+  const FALLBACK_ANTHROPIC_MODELS = ['claude-haiku-4-5', 'claude-sonnet-4-5', 'claude-opus-4-5'] as const
+
+  function costTier(provider: LlmProvider, modelId: string): 1 | 2 | 3 {
+    const id = modelId.toLowerCase()
+    if (provider === 'gemini') {
+      if (id.includes('flash-lite')) return 1
+      if (id.includes('flash')) return 2
+      if (id.includes('pro')) return 3
+      return 2
+    }
+    if (id.includes('haiku')) return 1
+    if (id.includes('sonnet')) return 2
+    if (id.includes('opus')) return 3
+    return 2
+  }
+
+  function costBadge(provider: LlmProvider, modelId: string) {
+    const tier = costTier(provider, modelId)
+    return tier === 1 ? '$' : tier === 2 ? '$$' : '$$$'
+  }
+
+  function sortModels(provider: LlmProvider, ids: string[]) {
+    return ids
+      .slice()
+      .sort((a, b) => costTier(provider, a) - costTier(provider, b) || a.localeCompare(b))
+  }
+
+  const sortedGeminiModels = useMemo(() => sortModels('gemini', geminiModels), [geminiModels])
+  const sortedAnthropicModels = useMemo(() => sortModels('anthropic', anthropicModels), [anthropicModels])
+
+  function normalizeModelInput(v: string) {
+    return v.trim().replace(/\s*\(\$+\)\s*$/, '')
+  }
+
   function moveProvider(from: number, to: number) {
     setProviderOrder((prev) => {
       if (from === to) return prev
@@ -222,17 +297,121 @@ export default function SettingsPage() {
     })
   }
 
+  async function loadGeminiModels() {
+    const key = geminiApiKey.trim()
+    if (!key) {
+      if (!geminiModels.length) setGeminiModels(Array.from(new Set(FALLBACK_GEMINI_MODELS)))
+      return
+    }
+    if (lastGeminiModelsKeyRef.current === key) return
+    lastGeminiModelsKeyRef.current = key
+    setGeminiModelsLoading(true)
+    try {
+      const res = await fetchWithTimeout(
+        'https://generativelanguage.googleapis.com/v1beta/models',
+        { headers: { 'x-goog-api-key': key } },
+        6000,
+      )
+      const data = (await res.json()) as unknown
+      const models =
+        typeof data === 'object' && data !== null && Array.isArray((data as Record<string, unknown>).models)
+          ? ((data as Record<string, unknown>).models as unknown[])
+          : []
+      const names = models
+        .map((m) => {
+          if (typeof m !== 'object' || m === null) return null
+          const obj = m as Record<string, unknown>
+          const name = typeof obj.name === 'string' ? obj.name : null
+          const methods = Array.isArray(obj.supportedGenerationMethods) ? (obj.supportedGenerationMethods as unknown[]) : []
+          const supportsGenerate = methods.some((x) => x === 'generateContent')
+          if (!name || !supportsGenerate) return null
+          // API returns "models/<id>"
+          const id = name.startsWith('models/') ? name.slice('models/'.length) : name
+          return id
+        })
+        .filter((x): x is string => Boolean(x && x.startsWith('gemini-')))
+      if (names.length) setGeminiModels(Array.from(new Set(names)))
+      else if (!geminiModels.length) setGeminiModels(Array.from(new Set(FALLBACK_GEMINI_MODELS)))
+    } catch {
+      if (!geminiModels.length) setGeminiModels(Array.from(new Set(FALLBACK_GEMINI_MODELS)))
+    } finally {
+      setGeminiModelsLoading(false)
+    }
+  }
+
+  async function loadAnthropicModels() {
+    const key = anthropicApiKey.trim()
+    if (!key) {
+      if (!anthropicModels.length) setAnthropicModels(Array.from(new Set(FALLBACK_ANTHROPIC_MODELS)))
+      return
+    }
+    if (lastAnthropicModelsKeyRef.current === key) return
+    lastAnthropicModelsKeyRef.current = key
+    setAnthropicModelsLoading(true)
+    try {
+      const res = await fetchWithTimeout(
+        'https://api.anthropic.com/v1/models',
+        {
+          headers: {
+            'content-type': 'application/json',
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
+            'x-api-key': key,
+          },
+        },
+        6000,
+      )
+      const data = (await res.json()) as unknown
+      const items =
+        typeof data === 'object' && data !== null && Array.isArray((data as Record<string, unknown>).data)
+          ? ((data as Record<string, unknown>).data as unknown[])
+          : []
+      const ids = items
+        .map((m) => {
+          if (typeof m !== 'object' || m === null) return null
+          const obj = m as Record<string, unknown>
+          return typeof obj.id === 'string' ? obj.id : null
+        })
+        .filter((x): x is string => Boolean(x))
+      if (ids.length) setAnthropicModels(Array.from(new Set(ids)))
+      else if (!anthropicModels.length) setAnthropicModels(Array.from(new Set(FALLBACK_ANTHROPIC_MODELS)))
+    } catch {
+      if (!anthropicModels.length) setAnthropicModels(Array.from(new Set(FALLBACK_ANTHROPIC_MODELS)))
+    } finally {
+      setAnthropicModelsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    // Prefetch so the picker is ready on first click.
+    if (geminiApiKey.trim()) void loadGeminiModels()
+    else setGeminiModels([])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geminiApiKey])
+
+  useEffect(() => {
+    if (anthropicApiKey.trim()) void loadAnthropicModels()
+    else setAnthropicModels([])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anthropicApiKey])
+
+  function openPicker(kind: NonNullable<typeof openModelPicker>) {
+    if (closePickerTimer.current) window.clearTimeout(closePickerTimer.current)
+    closePickerTimer.current = null
+    setOpenModelPicker(kind)
+    if (kind.startsWith('gemini')) void loadGeminiModels()
+    if (kind.startsWith('anthropic')) void loadAnthropicModels()
+  }
+
+  function scheduleClosePicker() {
+    if (closePickerTimer.current) window.clearTimeout(closePickerTimer.current)
+    closePickerTimer.current = window.setTimeout(() => setOpenModelPicker(null), 120)
+  }
+
   return (
     <div className="container stack">
-      <div className="row">
-        <div className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
-          <img src="/icons/ios/32.png" alt="" width={24} height={24} style={{ borderRadius: 6 }} />
-          <h2 style={{ margin: 0 }}>Settings</h2>
-        </div>
-        <Link to="/new" className="muted">
-          Back
-        </Link>
-      </div>
+      <TopNav />
+      <h2 style={{ margin: 0 }}>Settings</h2>
 
       <div className="card stack">
         <div className="field">
@@ -265,6 +444,11 @@ export default function SettingsPage() {
             onChange={(e) => setCultureInvariant(e.target.checked)}
           />
           <span>Send LubeLogger “culture-invariant” header</span>
+        </label>
+
+        <label className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
+          <input type="checkbox" checked={showSoldVehicles} onChange={(e) => setShowSoldVehicles(e.target.checked)} />
+          <span>Show sold vehicles</span>
         </label>
 
         <div className="field">
@@ -327,6 +511,166 @@ export default function SettingsPage() {
             autoCorrect="off"
             spellCheck={false}
           />
+        </div>
+
+        <div className="field">
+          <label>
+            Gemini model (Fuel) {costBadge('gemini', geminiModelFuel.trim() || DEFAULT_GEMINI_FUEL)}
+          </label>
+          <input
+            value={geminiModelFuel}
+            onChange={(e) => setGeminiModelFuel(normalizeModelInput(e.target.value))}
+            placeholder={`(default: ${DEFAULT_GEMINI_FUEL})`}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            onFocus={() => openPicker('geminiFuel')}
+            onBlur={scheduleClosePicker}
+            disabled={geminiModelsLoading && openModelPicker === 'geminiFuel'}
+          />
+          {openModelPicker === 'geminiFuel' ? (
+            <div className="card stack" style={{ marginTop: 8, padding: 10 }}>
+              {geminiModelsLoading ? (
+                <div className="muted">Loading Gemini models…</div>
+              ) : (
+                sortedGeminiModels.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className="btn small"
+                    style={{ justifyContent: 'flex-start' }}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      setGeminiModelFuel(m)
+                      setOpenModelPicker(null)
+                    }}
+                  >
+                    {m} ({costBadge('gemini', m)})
+                  </button>
+                ))
+              )}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="field">
+          <label>
+            Gemini model (Service) {costBadge('gemini', geminiModelService.trim() || DEFAULT_GEMINI_SERVICE)}
+          </label>
+          <input
+            value={geminiModelService}
+            onChange={(e) => setGeminiModelService(normalizeModelInput(e.target.value))}
+            placeholder={`(default: ${DEFAULT_GEMINI_SERVICE})`}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            onFocus={() => openPicker('geminiService')}
+            onBlur={scheduleClosePicker}
+            disabled={geminiModelsLoading && openModelPicker === 'geminiService'}
+          />
+          {openModelPicker === 'geminiService' ? (
+            <div className="card stack" style={{ marginTop: 8, padding: 10 }}>
+              {geminiModelsLoading ? (
+                <div className="muted">Loading Gemini models…</div>
+              ) : (
+                sortedGeminiModels.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className="btn small"
+                    style={{ justifyContent: 'flex-start' }}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      setGeminiModelService(m)
+                      setOpenModelPicker(null)
+                    }}
+                  >
+                    {m} ({costBadge('gemini', m)})
+                  </button>
+                ))
+              )}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="field">
+          <label>
+            Anthropic model (Fuel) {costBadge('anthropic', anthropicModelFuel.trim() || DEFAULT_ANTHROPIC_FUEL)}
+          </label>
+          <input
+            value={anthropicModelFuel}
+            onChange={(e) => setAnthropicModelFuel(normalizeModelInput(e.target.value))}
+            placeholder={`(default: ${DEFAULT_ANTHROPIC_FUEL})`}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            onFocus={() => openPicker('anthropicFuel')}
+            onBlur={scheduleClosePicker}
+            disabled={anthropicModelsLoading && openModelPicker === 'anthropicFuel'}
+          />
+          {openModelPicker === 'anthropicFuel' ? (
+            <div className="card stack" style={{ marginTop: 8, padding: 10 }}>
+              {anthropicModelsLoading ? (
+                <div className="muted">Loading Anthropic models…</div>
+              ) : (
+                sortedAnthropicModels.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className="btn small"
+                    style={{ justifyContent: 'flex-start' }}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      setAnthropicModelFuel(m)
+                      setOpenModelPicker(null)
+                    }}
+                  >
+                    {m} ({costBadge('anthropic', m)})
+                  </button>
+                ))
+              )}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="field">
+          <label>
+            Anthropic model (Service) {costBadge('anthropic', anthropicModelService.trim() || DEFAULT_ANTHROPIC_SERVICE)}
+          </label>
+          <input
+            value={anthropicModelService}
+            onChange={(e) => setAnthropicModelService(normalizeModelInput(e.target.value))}
+            placeholder={`(default: ${DEFAULT_ANTHROPIC_SERVICE})`}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            onFocus={() => openPicker('anthropicService')}
+            onBlur={scheduleClosePicker}
+            disabled={anthropicModelsLoading && openModelPicker === 'anthropicService'}
+          />
+          {openModelPicker === 'anthropicService' ? (
+            <div className="card stack" style={{ marginTop: 8, padding: 10 }}>
+              {anthropicModelsLoading ? (
+                <div className="muted">Loading Anthropic models…</div>
+              ) : (
+                sortedAnthropicModels.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className="btn small"
+                    style={{ justifyContent: 'flex-start' }}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      setAnthropicModelService(m)
+                      setOpenModelPicker(null)
+                    }}
+                  >
+                    {m} ({costBadge('anthropic', m)})
+                  </button>
+                ))
+              )}
+            </div>
+          ) : null}
         </div>
 
         {!hasAnyLlmKey ? <div className="muted">No LLM keys set. You can still enter values manually.</div> : null}
