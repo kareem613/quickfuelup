@@ -8,6 +8,10 @@ import { compressImage } from '../lib/image'
 import { extractFromImagesWithFallback } from '../lib/llm'
 import { addGasRecord, getVehicles } from '../lib/lubelogger'
 import type { Draft, Vehicle } from '../lib/types'
+import { VehicleSelectStep } from './newEntry/VehicleSelectStep'
+import { PhotoStep } from './newEntry/PhotoStep'
+import { FuelingStep } from './newEntry/FuelingStep'
+import { DetailsStep } from './newEntry/DetailsStep'
 
 function numberOrEmpty(n: number | undefined) {
   return typeof n === 'number' && Number.isFinite(n) ? String(n) : ''
@@ -485,357 +489,166 @@ export default function NewEntryPage() {
         </div>
       ) : null}
 
-      <div className={`card stack${step1Done && !card1Open ? ' collapsed' : ''}`}>
-        <button
-          className="row card-header-btn"
-          type="button"
-          onClick={() => {
-            if (!step1Done) return
-            card1Touched.current = true
-            setCard1Open((v) => !v)
-          }}
-        >
-          <strong>1) Select vehicle</strong>
-          {step1Done ? <DoneIcon /> : <span className="muted">Required</span>}
-        </button>
-        {step1Done && !card1Open ? null : busy ? (
-          <div className="muted">Loading vehicles…</div>
-        ) : (
-          <div className="vehicle-grid">
-            {vehicles.map((v) => {
-              const selected = draft.vehicleId === v.id
-              return (
-                  <button
-                    key={v.id}
-                    className={`vehicle-card${selected ? ' selected' : ''}`}
-                    onClick={() => {
-                      setExtractFailed(false)
-                      setExtractLlmMessage(null)
-                      setDraft((d) => ({
-                        ...d,
-                        vehicleId: v.id,
-                        extracted: undefined,
-                      }))
-                    }}
-                    disabled={submitBusy}
-                  type="button"
-                >
-                  {(() => {
-                    const parts = splitVehicleName(v.name)
-                    return (
-                      <div className="vehicle-name">
-                        {parts.year ? <div className="vehicle-year">{parts.year}</div> : null}
-                        <div className="vehicle-model">{parts.model}</div>
-                      </div>
-                    )
-                  })()}
-                </button>
-              )
-            })}
-          </div>
-        )}
-      </div>
+      <VehicleSelectStep
+        stepDone={step1Done}
+        open={card1Open}
+        busy={busy}
+        submitBusy={submitBusy}
+        vehicles={vehicles}
+        selectedVehicleId={draft.vehicleId}
+        onToggle={() => {
+          if (!step1Done) return
+          card1Touched.current = true
+          setCard1Open((v) => !v)
+        }}
+        onSelectVehicle={(vehicleId) => {
+          setExtractFailed(false)
+          setExtractLlmMessage(null)
+          setDraft((d) => ({
+            ...d,
+            vehicleId,
+            extracted: undefined,
+          }))
+        }}
+        splitVehicleName={splitVehicleName}
+        doneIcon={<DoneIcon />}
+      />
 
-      <div className={`card stack${step2Done && !card2Open ? ' collapsed' : ''}`} style={{ opacity: step1Done ? 1 : 0.6 }}>
-        <button
-          className="row card-header-btn"
-          type="button"
-          onClick={() => {
-            if (!step2Done) return
-            card2Touched.current = true
-            setCard2Open((v) => !v)
-          }}
-        >
-          <strong>2) Pump / receipt photo</strong>
-          {step2Done ? <DoneIcon /> : <span className="muted">Required</span>}
-        </button>
-        {step2Done && !card2Open ? null : (
-          <>
-            <div className={`image-preview clickable split${!step1Done || submitBusy ? ' disabled' : ''}`}>
-              {pumpUrl ? (
-                <>
-                  <img src={pumpUrl} alt="Pump preview" />
-                </>
-              ) : null}
-              <div className="image-split-overlay" aria-hidden="true">
-                <button
-                  className="image-split-btn"
-                  type="button"
-                  onClick={() => pumpCameraInputRef.current?.click()}
-                  disabled={!step1Done || submitBusy}
-                >
-                  <CameraIcon />
-                  <div>Camera</div>
-                </button>
-                <button
-                  className="image-split-btn"
-                  type="button"
-                  onClick={() => pumpGalleryInputRef.current?.click()}
-                  disabled={!step1Done || submitBusy}
-                >
-                  <FileIcon />
-                  <div>Files</div>
-                </button>
-              </div>
-            </div>
-            <input
-              ref={pumpCameraInputRef}
-              className="sr-only"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={(e) => onFileChange('pumpImage', e.target.files?.[0] ?? null)}
-              disabled={!step1Done || submitBusy}
-            />
-            <input
-              ref={pumpGalleryInputRef}
-              className="sr-only"
-              type="file"
-              accept="image/*"
-              onChange={(e) => onFileChange('pumpImage', e.target.files?.[0] ?? null)}
-              disabled={!step1Done || submitBusy}
-            />
-            <div className="muted">{draft.pumpImage ? 'Selected' : ''}</div>
-          </>
-        )}
-      </div>
+      <PhotoStep
+        stepNumber={2}
+        title="Pump / receipt photo"
+        stepDone={step2Done}
+        open={card2Open}
+        enabled={step1Done}
+        submitBusy={submitBusy}
+        imageUrl={pumpUrl}
+        selectedLabel={draft.pumpImage ? 'Selected' : ''}
+        cameraInputRef={pumpCameraInputRef}
+        fileInputRef={pumpGalleryInputRef}
+        accept="image/*"
+        capture="environment"
+        onToggle={() => {
+          if (!step2Done) return
+          card2Touched.current = true
+          setCard2Open((v) => !v)
+        }}
+        onPickCamera={() => pumpCameraInputRef.current?.click()}
+        onPickFiles={() => pumpGalleryInputRef.current?.click()}
+        onFileSelected={(file) => onFileChange('pumpImage', file)}
+        doneIcon={<DoneIcon />}
+        cameraIcon={<CameraIcon />}
+        fileIcon={<FileIcon />}
+      />
 
-      <div className={`card stack${step3Done && !card3Open ? ' collapsed' : ''}`} style={{ opacity: step1Done && step2Done ? 1 : 0.6 }}>
-        <button
-          className="row card-header-btn"
-          type="button"
-          onClick={() => {
-            if (!step3Done) return
-            card3Touched.current = true
-            setCard3Open((v) => !v)
-          }}
-        >
-          <strong>3) Odometer photo</strong>
-          {step3Done ? <DoneIcon /> : <span className="muted">Required</span>}
-        </button>
-        {step3Done && !card3Open ? null : (
-          <>
-            <div className={`image-preview clickable split${!step1Done || !step2Done || submitBusy ? ' disabled' : ''}`}>
-              {odoUrl ? (
-                <>
-                  <img src={odoUrl} alt="Odometer preview" />
-                </>
-              ) : null}
-              <div className="image-split-overlay" aria-hidden="true">
-                <button
-                  className="image-split-btn"
-                  type="button"
-                  onClick={() => odoCameraInputRef.current?.click()}
-                  disabled={!step1Done || !step2Done || submitBusy}
-                >
-                  <CameraIcon />
-                  <div>Camera</div>
-                </button>
-                <button
-                  className="image-split-btn"
-                  type="button"
-                  onClick={() => odoGalleryInputRef.current?.click()}
-                  disabled={!step1Done || !step2Done || submitBusy}
-                >
-                  <FileIcon />
-                  <div>Files</div>
-                </button>
-              </div>
-            </div>
-            <input
-              ref={odoCameraInputRef}
-              className="sr-only"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={(e) => onFileChange('odometerImage', e.target.files?.[0] ?? null)}
-              disabled={!step1Done || !step2Done || submitBusy}
-            />
-            <input
-              ref={odoGalleryInputRef}
-              className="sr-only"
-              type="file"
-              accept="image/*"
-              onChange={(e) => onFileChange('odometerImage', e.target.files?.[0] ?? null)}
-              disabled={!step1Done || !step2Done || submitBusy}
-            />
-            <div className="muted">{draft.odometerImage ? 'Selected' : ''}</div>
-          </>
-        )}
-      </div>
+      <PhotoStep
+        stepNumber={3}
+        title="Odometer photo"
+        stepDone={step3Done}
+        open={card3Open}
+        enabled={step1Done && step2Done}
+        submitBusy={submitBusy}
+        imageUrl={odoUrl}
+        selectedLabel={draft.odometerImage ? 'Selected' : ''}
+        cameraInputRef={odoCameraInputRef}
+        fileInputRef={odoGalleryInputRef}
+        accept="image/*"
+        capture="environment"
+        onToggle={() => {
+          if (!step3Done) return
+          card3Touched.current = true
+          setCard3Open((v) => !v)
+        }}
+        onPickCamera={() => odoCameraInputRef.current?.click()}
+        onPickFiles={() => odoGalleryInputRef.current?.click()}
+        onFileSelected={(file) => onFileChange('odometerImage', file)}
+        doneIcon={<DoneIcon />}
+        cameraIcon={<CameraIcon />}
+        fileIcon={<FileIcon />}
+      />
 
-      <div className={`card stack${extractBusy ? ' extracting' : ''}`} style={{ opacity: canEditDetails ? 1 : 0.6 }}>
-        <div className="row">
-          <strong>4) Fueling</strong>
-          <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
-            <button
-              className="btn small"
-              disabled={!canExtract || extractBusy || submitBusy}
-              onClick={() => {
-                setExtractFailed(false)
-                setExtractLlmMessage(null)
-                lastExtractSigRef.current = ''
-                setForceExtractTick((n) => n + 1)
-                setDraft((d) => ({ ...d, extracted: undefined }))
-              }}
-              type="button"
-              aria-label="Retry extraction"
-              title="Retry"
-            >
-              <RefreshIcon />
-            </button>
-          </div>
-        </div>
+      <FuelingStep
+        canEditDetails={canEditDetails}
+        extractBusy={extractBusy}
+        canExtract={canExtract}
+        submitBusy={submitBusy}
+        extractFailed={extractFailed}
+        extractLlmMessage={extractLlmMessage}
+        submitAttempted={submitAttempted}
+        odometerInvalid={!(typeof form.odometer === 'number' && Number.isFinite(form.odometer) && form.odometer >= 0)}
+        fuelQuantityInvalid={!(typeof form.fuelconsumed === 'number' && Number.isFinite(form.fuelconsumed) && form.fuelconsumed > 0)}
+        totalCostInvalid={!(typeof form.cost === 'number' && Number.isFinite(form.cost) && form.cost > 0)}
+        odometer={numberOrEmpty(form.odometer)}
+        fuelQuantity={numberOrEmpty(form.fuelconsumed)}
+        totalCost={numberOrEmpty(form.cost)}
+        onRetry={() => {
+          setExtractFailed(false)
+          setExtractLlmMessage(null)
+          lastExtractSigRef.current = ''
+          setForceExtractTick((n) => n + 1)
+          setDraft((d) => ({ ...d, extracted: undefined }))
+        }}
+        onOdometerChange={(value) => {
+          const n = Number(value)
+          setDraft((d) => ({
+            ...d,
+            form: { ...form, odometer: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
+          }))
+          if (submitAttempted) setSubmitValidationMessage(null)
+        }}
+        onFuelQuantityChange={(value) => {
+          const n = Number(value)
+          setDraft((d) => ({
+            ...d,
+            form: { ...form, fuelconsumed: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
+          }))
+          if (submitAttempted) setSubmitValidationMessage(null)
+        }}
+        onTotalCostChange={(value) => {
+          const n = Number(value)
+          setDraft((d) => ({
+            ...d,
+            form: { ...form, cost: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
+          }))
+          if (submitAttempted) setSubmitValidationMessage(null)
+        }}
+        refreshIcon={<RefreshIcon />}
+      />
 
-        {extractFailed ? (
-          <div className="error">
-            <div>Failed to extract values. Enter manually or try again.</div>
-            {extractLlmMessage ? (
-              <div className="muted" style={{ marginTop: 6 }}>
-                {extractLlmMessage.length > 500 ? `${extractLlmMessage.slice(0, 500)}…` : extractLlmMessage}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div
-          className={`field${
-            submitAttempted && !(typeof form.odometer === 'number' && Number.isFinite(form.odometer) && form.odometer >= 0) ? ' invalid' : ''
-          }`}
-        >
-          <label>Odometer</label>
-          <input
-            inputMode="numeric"
-            value={numberOrEmpty(form.odometer)}
-            onChange={(e) => {
-              const n = Number(e.target.value)
-              setDraft((d) => ({
-                ...d,
-                form: { ...form, odometer: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
-              }))
-              if (submitAttempted) setSubmitValidationMessage(null)
-            }}
-            disabled={!canEditDetails || submitBusy}
-          />
-        </div>
-
-        <div className="grid two no-collapse">
-          <div
-            className={`field${
-              submitAttempted && !(typeof form.fuelconsumed === 'number' && Number.isFinite(form.fuelconsumed) && form.fuelconsumed > 0)
-                ? ' invalid'
-                : ''
-            }`}
-          >
-            <label>Fuel quantity</label>
-            <input
-              inputMode="decimal"
-              value={numberOrEmpty(form.fuelconsumed)}
-              onChange={(e) => {
-                const n = Number(e.target.value)
-                setDraft((d) => ({
-                  ...d,
-                  form: { ...form, fuelconsumed: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
-                }))
-                if (submitAttempted) setSubmitValidationMessage(null)
-              }}
-              disabled={!canEditDetails || submitBusy}
-            />
-          </div>
-          <div
-            className={`field${
-              submitAttempted && !(typeof form.cost === 'number' && Number.isFinite(form.cost) && form.cost > 0) ? ' invalid' : ''
-            }`}
-          >
-            <label>Total cost</label>
-            <input
-              inputMode="decimal"
-              value={numberOrEmpty(form.cost)}
-              onChange={(e) => {
-                const n = Number(e.target.value)
-                setDraft((d) => ({
-                  ...d,
-                  form: { ...form, cost: Number.isFinite(n) ? n : undefined, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup },
-                }))
-                if (submitAttempted) setSubmitValidationMessage(null)
-              }}
-              disabled={!canEditDetails || submitBusy}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="card stack" style={{ opacity: canEditDetails ? 1 : 0.6 }}>
-        <div className="row">
-          <strong>5) Details</strong>
-          <span className="muted">{draft.date}</span>
-        </div>
-
-        <div className="field">
-          <label>Date</label>
-          <input
-            type="date"
-            value={draft.date}
-            onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
-            disabled={submitBusy}
-          />
-        </div>
-
-        <div className="row" style={{ justifyContent: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
-          <label className="row" style={{ justifyContent: 'flex-start', gap: 8 }}>
-              <input
-                type="checkbox"
-                checked={Boolean(form.isfilltofull)}
-                onChange={(e) => setDraft((d) => ({ ...d, form: { ...form, isfilltofull: e.target.checked, missedfuelup: form.missedfuelup } }))}
-                disabled={!canEditDetails || submitBusy}
-              />
-              <span>Fill to full</span>
-            </label>
-
-          <label className="row" style={{ justifyContent: 'flex-start', gap: 8 }}>
-              <input
-                type="checkbox"
-                checked={Boolean(form.missedfuelup)}
-                onChange={(e) => setDraft((d) => ({ ...d, form: { ...form, missedfuelup: e.target.checked, isfilltofull: form.isfilltofull } }))}
-                disabled={!canEditDetails || submitBusy}
-              />
-              <span>Missed fuel-up</span>
-            </label>
-          </div>
-
-        <div className="field">
-          <label>Notes (optional)</label>
-          <textarea
-            rows={2}
-            value={form.notes ?? ''}
-            onChange={(e) => setDraft((d) => ({ ...d, form: { ...form, notes: e.target.value, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup } }))}
-            disabled={!canEditDetails || submitBusy}
-          />
-        </div>
-
-        {submitAttempted && !canSubmit && submitValidationMessage ? <div className="error">{submitValidationMessage}</div> : null}
-        <div className="actions">
+      <DetailsStep
+        canEditDetails={canEditDetails}
+        submitBusy={submitBusy}
+        extractBusy={extractBusy}
+        imageBusy={imageBusy}
+        date={draft.date}
+        isFillToFull={Boolean(form.isfilltofull)}
+        missedFuelUp={Boolean(form.missedfuelup)}
+        notes={form.notes ?? ''}
+        submitAttempted={submitAttempted}
+        canSubmit={canSubmit}
+        submitValidationMessage={submitValidationMessage}
+        onDateChange={(date) => setDraft((d) => ({ ...d, date }))}
+        onFillToFullChange={(v) => setDraft((d) => ({ ...d, form: { ...form, isfilltofull: v, missedfuelup: form.missedfuelup } }))}
+        onMissedFuelUpChange={(v) => setDraft((d) => ({ ...d, form: { ...form, missedfuelup: v, isfilltofull: form.isfilltofull } }))}
+        onNotesChange={(v) =>
+          setDraft((d) => ({ ...d, form: { ...form, notes: v, isfilltofull: form.isfilltofull, missedfuelup: form.missedfuelup } }))
+        }
+        onSubmit={onSubmit}
+        onStartOver={async () => {
+          await clearDraft()
+          lastExtractSigRef.current = ''
+          setExtractFailed(false)
+          setExtractLlmMessage(null)
+          setSubmitAttempted(false)
+          setSubmitValidationMessage(null)
+          setDraft({ date: todayISODate(), form: { isfilltofull: true, missedfuelup: false } })
+        }}
+        submitLabel={submitBusy ? 'Submitting…' : 'Submit to LubeLogger'}
+        primaryButton={
           <button className="btn primary" disabled={submitBusy || extractBusy} onClick={onSubmit} type="button">
             {submitBusy ? 'Submitting…' : 'Submit to LubeLogger'}
           </button>
-          <button
-            className="btn"
-            disabled={submitBusy || extractBusy || imageBusy}
-            onClick={async () => {
-              await clearDraft()
-              lastExtractSigRef.current = ''
-              setExtractFailed(false)
-              setExtractLlmMessage(null)
-              setSubmitAttempted(false)
-              setSubmitValidationMessage(null)
-              setDraft({ date: todayISODate(), form: { isfilltofull: true, missedfuelup: false } })
-            }}
-            type="button"
-          >
-            Start over
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {imageBusy || extractBusy ? (
         <div className="muted">{imageBusy ? 'Processing images…' : 'Extracting from photos…'}</div>
