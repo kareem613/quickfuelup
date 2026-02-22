@@ -639,8 +639,8 @@ export default function SettingsPage() {
               ) : (
                 <>
                   <div className="muted">
-                    Warning: This shares your LubeLogger API key. Anyone you share this with can create/edit records via the
-                    API (editor-level access). It does not give them your LubeLogger login.
+                    Warning: This does not give them your LubeLogger login, but it does share your LubeLogger API key—so
+                    anyone you share this with can create/edit records via the API (editor-level access).
                   </div>
                   <div className="muted">Use a long passcode; anyone with the link can attempt offline guessing.</div>
                   <div className="field">
