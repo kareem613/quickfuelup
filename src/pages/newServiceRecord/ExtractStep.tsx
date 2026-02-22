@@ -50,7 +50,7 @@ export function ExtractStep(props: {
           {props.stepDone ? props.doneIcon : <span className="muted">Required</span>}
           {showRetry ? (
             <button
-              className="btn small"
+              className="icon-btn"
               disabled={!props.canExtractAny || props.extracting || props.submitBusy}
               onClick={props.onRetry}
               type="button"
