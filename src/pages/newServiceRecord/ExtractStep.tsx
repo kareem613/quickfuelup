@@ -12,7 +12,6 @@ export function ExtractStep(props: {
   submitBusy: boolean
   extractFailed: boolean
   extractMessage: string | null
-  warningItems: UiWarning[]
   keepOpen: boolean
   onToggle: () => void
   onRetry: () => void
@@ -72,27 +71,6 @@ export function ExtractStep(props: {
       {message ? (
         <div className={message.kind === 'error' ? 'error' : 'muted'} style={{ whiteSpace: 'pre-wrap' }}>
           {message.text}
-        </div>
-      ) : null}
-
-      {props.stepDone && !props.extractFailed && props.warningItems.length ? (
-        <div
-          style={{
-            marginTop: 12,
-            border: '1px solid rgba(245, 158, 11, 0.45)',
-            background: 'rgba(245, 158, 11, 0.10)',
-            borderRadius: 12,
-            padding: '10px 12px',
-          }}
-        >
-          <div style={{ fontWeight: 650, marginBottom: 6 }}>Warnings</div>
-          <ul style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 6 }}>
-            {props.warningItems.map((w, i) => (
-              <li key={`${w.title}:${i}`}>
-                <strong>{w.title}</strong>: {w.detail}
-              </li>
-            ))}
-          </ul>
         </div>
       ) : null}
     </CollapsibleCard>

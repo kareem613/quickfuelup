@@ -317,21 +317,9 @@ export default function NewServiceRecordPage() {
           : field.charAt(0).toUpperCase() + field.slice(1)
   }
 
-  const extractWarningItems: UiWarning[] = extractedWarnings.map((w) => {
-    const parsed = parsedRecordWarning(w)
-    if (!parsed) return { title: w.path, detail: warningDetail(w) }
-    return {
-      title: `Record ${parsed.recordIdx + 1} • ${fieldLabel(parsed.field)}`,
-      detail: warningDetail(w),
-    }
-  })
-
   const vehicleWarningItems: UiWarning[] = extractedWarnings
     .filter((w) => /^\/records\/\d+\/vehicleId$/.test(w.path))
-    .map((w) => {
-      const parsed = parsedRecordWarning(w)
-      return { title: parsed ? `Record ${parsed.recordIdx + 1}` : 'Vehicle', detail: warningDetail(w) }
-    })
+    .map((w) => ({ title: 'Warning', detail: warningDetail(w) }))
 
   function warningItemsForRecord(recordIdx: number): UiWarning[] {
     return extractedWarnings
@@ -790,7 +778,6 @@ export default function NewServiceRecordPage() {
         submitBusy={submitBusy}
         extractFailed={extractFailed}
         extractMessage={extractMessage}
-        warningItems={extractWarningItems}
         keepOpen={keepExtractOpen}
         onToggle={() => {
           if (!step1Done) return
