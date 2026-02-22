@@ -14,6 +14,9 @@ export function normalizeConfigFromUnknown(value: unknown): AppConfig | null {
       : null
   if (!parsed?.baseUrl || !parsed.lubeLoggerApiKey) return null
 
+  const uiThemeRaw = (parsed as Record<string, unknown>).uiTheme
+  const uiTheme = uiThemeRaw === 'system' || uiThemeRaw === 'light' || uiThemeRaw === 'dark' ? uiThemeRaw : undefined
+
   const llmObj = typeof parsed.llm === 'object' && parsed.llm !== null ? (parsed.llm as Record<string, unknown>) : {}
 
   const geminiApiKey =
@@ -55,6 +58,7 @@ export function normalizeConfigFromUnknown(value: unknown): AppConfig | null {
     lubeLoggerApiKey: String(parsed.lubeLoggerApiKey),
     cultureInvariant: parsed.cultureInvariant === undefined ? true : Boolean(parsed.cultureInvariant),
     showSoldVehicles: Boolean((parsed as Record<string, unknown>).showSoldVehicles),
+    ...(uiTheme ? { uiTheme } : null),
     useProxy: Boolean(parsed.useProxy),
     llm: {
       providerOrder,

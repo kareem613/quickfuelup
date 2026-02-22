@@ -5,6 +5,8 @@ import { loadConfig, normalizeConfigFromUnknown, saveConfig } from '../lib/confi
 import { decryptTokenToConfigJson, encryptConfigToToken, isShareCryptoSupported } from '../lib/shareConfig'
 import type { AppConfig, LlmProvider } from '../lib/types'
 import { getDeferredPrompt, isPwaInstallEnabled, isRunningStandalone, setDeferredPrompt, setPwaInstallEnabled } from '../lib/pwaInstall'
+import { applyThemePreference, loadThemePreference, saveThemePreference } from '../lib/theme'
+import type { ThemePreference } from '../lib/types'
 
 function safeStringify(value: unknown) {
   try {
@@ -65,6 +67,7 @@ export default function SettingsPage() {
   const closePickerTimer = useRef<number | null>(null)
   const [cultureInvariant, setCultureInvariant] = useState(existing?.cultureInvariant ?? true)
   const [showSoldVehicles, setShowSoldVehicles] = useState(existing?.showSoldVehicles ?? false)
+  const [uiTheme, setUiTheme] = useState<ThemePreference>(() => existing?.uiTheme ?? loadThemePreference())
   const [testResult, setTestResult] = useState<string | null>(null)
   const [busyTest, setBusyTest] = useState(false)
   const [connectedAs, setConnectedAs] = useState<{ username: string; isAdmin: boolean } | null>(null)
@@ -120,6 +123,7 @@ export default function SettingsPage() {
           lubeLoggerApiKey: lubeLoggerApiKey.trim(),
           cultureInvariant,
           showSoldVehicles,
+          uiTheme,
           useProxy: false,
           llm: {
             providerOrder: activeProviders,
@@ -144,6 +148,11 @@ export default function SettingsPage() {
     setLubeLoggerApiKey(next.lubeLoggerApiKey ?? '')
     setCultureInvariant(next.cultureInvariant ?? true)
     setShowSoldVehicles(Boolean(next.showSoldVehicles))
+    if (next.uiTheme) {
+      setUiTheme(next.uiTheme)
+      saveThemePreference(next.uiTheme)
+      applyThemePreference(next.uiTheme)
+    }
     const orderRaw = next.llm?.providerOrder ?? (['gemini', 'anthropic'] as const)
     setProviderOrder(Array.from(new Set(orderRaw.filter((p) => p === 'gemini' || p === 'anthropic'))) as LlmProvider[])
     setGeminiApiKey(next.llm?.geminiApiKey ?? '')
@@ -335,6 +344,14 @@ export default function SettingsPage() {
     navigate('/new')
   }
 
+  function onSetTheme(next: ThemePreference) {
+    setUiTheme(next)
+    saveThemePreference(next)
+    applyThemePreference(next)
+    const existingCfg = loadConfig()
+    if (existingCfg) saveConfig({ ...existingCfg, uiTheme: next })
+  }
+
   function providerLabel(p: LlmProvider) {
     return p === 'anthropic' ? 'Anthropic' : 'Gemini'
   }
@@ -514,6 +531,25 @@ export default function SettingsPage() {
     <div className="container stack">
       <TopNav />
       <h2 style={{ margin: 0 }}>Settings</h2>
+
+      <div className="card stack">
+        <strong>UI settings</strong>
+        <div className="field">
+          <label>Theme</label>
+          <select
+            value={uiTheme}
+            onChange={(e) => {
+              const v = e.target.value
+              if (v === 'system' || v === 'dark' || v === 'light') onSetTheme(v)
+            }}
+          >
+            <option value="system">System</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </div>
+        <div className="muted">System follows your device theme.</div>
+      </div>
 
       {importToken && importModalOpen ? (
         <div
@@ -759,23 +795,13 @@ export default function SettingsPage() {
         <div className="field">
           <label>LLM order</label>
           <div className="stack" style={{ gap: 8 }}>
-            {activeProviders.length ? (
-              activeProviders.map((p, idx) => (
-              <div
-                key={p}
-                className="row"
-                style={{
-                  padding: '8px 10px',
-                  borderRadius: 10,
-                  border: '1px solid rgba(255, 255, 255, 0.14)',
-                  background: 'rgba(0, 0, 0, 0.18)',
-                }}
-                aria-label={`LLM priority ${idx + 1}: ${providerLabel(p)}`}
-              >
-                <strong>
-                  {idx + 1}. {providerLabel(p)}
-                </strong>
-                <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                {activeProviders.length ? (
+                  activeProviders.map((p, idx) => (
+               <div key={p} className="row llm-order-item" aria-label={`LLM priority ${idx + 1}: ${providerLabel(p)}`}>
+                 <strong>
+                   {idx + 1}. {providerLabel(p)}
+                 </strong>
+                 <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
                   <button className="btn small" type="button" disabled={idx === 0} onClick={() => moveProvider(idx, idx - 1)}>
                     ↑
                   </button>

@@ -1,11 +1,14 @@
 export type LlmProvider = 'gemini' | 'anthropic'
 
+export type ThemePreference = 'system' | 'light' | 'dark'
+
 export type AppConfig = {
   baseUrl: string
   lubeLoggerApiKey: string
   cultureInvariant: boolean
   // When false/undefined, sold vehicles are hidden from pickers.
   showSoldVehicles?: boolean
+  uiTheme?: ThemePreference
   useProxy: boolean
   llm: {
     providerOrder: LlmProvider[]
