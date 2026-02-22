@@ -6,7 +6,8 @@ You will be given two photos:
 2) A vehicle odometer display
 
 ## Output (JSON only)
-Return **only valid JSON** (no markdown, no backticks, no extra text) matching this shape:
+Return **only valid JSON** (no markdown, no backticks, no extra text).
+It must validate against the schema contract below.
 
 \`\`\`json
 {
@@ -56,7 +57,8 @@ Create a sensible set of LubeLogger records from this document.
 This is **NOT** necessarily one record per line item — group logically into records that represent one service event/visit.
 
 ## Output (JSON only)
-Return **only valid JSON** (no markdown, no backticks, no extra text) matching this shape:
+Return **only valid JSON** (no markdown, no backticks, no extra text).
+It must validate against the schema contract below.
 
 \`\`\`json
 {
@@ -125,7 +127,7 @@ Return **only valid JSON** (no markdown, no backticks, no extra text) matching t
         "required": ["path", "reason"],
         "properties": {
           "path": { "type": "string", "minLength": 1 },
-          "reason": { "enum": ["missing", "guessed", "uncertain", "conflict", "inferred"] },
+          "reason": { "enum": ["missing", "uncertain", "inferred"] },
           "message": { "type": ["string", "null"] }
         }
       }

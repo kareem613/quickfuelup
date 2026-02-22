@@ -85,7 +85,7 @@ export type ServiceExtractionResult = {
   rawJson?: unknown
 }
 
-export type ServiceExtractionWarningReason = 'missing' | 'guessed' | 'uncertain' | 'conflict' | 'inferred'
+export type ServiceExtractionWarningReason = 'missing' | 'uncertain' | 'inferred'
 
 export type ServiceExtractionWarning = {
   path: string
