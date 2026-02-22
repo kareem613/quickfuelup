@@ -6,17 +6,7 @@ You will be given two photos:
 2) A vehicle odometer display
 
 ## Output (JSON only)
-Return **only valid JSON** (no markdown, no backticks, no extra text).
-It must validate against the schema contract below.
-
-\`\`\`json
-{
-  "odometer": 123456,
-  "fuelQuantity": 12.34,
-  "totalCost": 45.67,
-  "explanation": "Optional: include only if one or more fields are null"
-}
-\`\`\`
+JSON only. Must validate against the schema contract below.
 
 ## Schema contract (must match)
 \`\`\`json
@@ -57,31 +47,7 @@ Create a sensible set of LubeLogger records from this document.
 This is **NOT** necessarily one record per line item — group logically into records that represent one service event/visit.
 
 ## Output (JSON only)
-Return **only valid JSON** (no markdown, no backticks, no extra text).
-It must validate against the schema contract below.
-
-\`\`\`json
-{
-  "records": [
-    {
-      "recordType": "service",
-      "vehicleId": 123,
-      "date": "2026-01-31",
-      "odometer": 123456,
-      "description": "Oil change",
-      "totalCost": 89.12,
-      "notes": "Optional: detailed work performed",
-      "tags": "Optional: comma-separated",
-      "extraFields": [{"name": "Oil Type", "value": "5W-30"}],
-      "explanation": "Optional: per-record caveats"
-    }
-  ],
-  "explanation": "Optional: overall caveats",
-  "warnings": [
-    {"path": "/records/0/odometer", "reason": "uncertain", "message": "Optional"}
-  ]
-}
-\`\`\`
+JSON only. Must validate against the schema contract below.
 
 ## Schema contract (must match)
 \`\`\`json
