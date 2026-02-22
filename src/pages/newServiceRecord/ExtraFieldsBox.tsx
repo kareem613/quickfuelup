@@ -1,5 +1,21 @@
 import type { ServiceDraftRecord } from '../../lib/types'
 
+function TrashIcon() {
+  return (
+    <span className="status-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none">
+        <path
+          d="M9 3h6m-7 4h8m-9 0 1 14h8l1-14M10 10v8M14 10v8"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  )
+}
+
 export function ExtraFieldsBox(props: {
   record: ServiceDraftRecord
   requiredNames: string[]
@@ -33,7 +49,7 @@ export function ExtraFieldsBox(props: {
         const isReq = props.requiredNames.includes(ef.name)
         const missingRequired = isReq && !ef.value.trim()
         return (
-          <div key={efIdx} className="grid two no-collapse" style={{ alignItems: 'flex-end' }}>
+          <div key={efIdx} className="extra-fields-row">
             <div className="field">
               <label>{isReq ? `Name (required)` : 'Name'}</label>
               <input
@@ -63,22 +79,22 @@ export function ExtraFieldsBox(props: {
                 disabled={props.submitBusy || props.isSubmitted}
               />
             </div>
-            <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
-              <button
-                className="btn small"
-                type="button"
-                onClick={() => {
-                  props.updateRecord(props.record.id, (prev) => {
-                    const next = (prev.form.extraFields ?? []).slice()
-                    next.splice(efIdx, 1)
-                    return { ...prev, form: { ...prev.form, extraFields: next } }
-                  })
-                }}
-                disabled={props.submitBusy || props.isSubmitted}
-              >
-                Remove
-              </button>
-            </div>
+            <button
+              className="icon-btn"
+              type="button"
+              onClick={() => {
+                props.updateRecord(props.record.id, (prev) => {
+                  const next = (prev.form.extraFields ?? []).slice()
+                  next.splice(efIdx, 1)
+                  return { ...prev, form: { ...prev.form, extraFields: next } }
+                })
+              }}
+              disabled={props.submitBusy || props.isSubmitted}
+              aria-label="Remove extra field"
+              title="Remove"
+            >
+              <TrashIcon />
+            </button>
           </div>
         )
       })}
@@ -90,4 +106,3 @@ export function ExtraFieldsBox(props: {
     </div>
   )
 }
-

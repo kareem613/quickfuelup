@@ -46,6 +46,11 @@ body {
   background: #0b1220;
 }
 
+/* Some modals use className="modal card" (same element), not ".modal .card". */
+.modal.card {
+  background: #0b1220;
+}
+
 a {
   color: inherit;
 }
@@ -544,6 +549,21 @@ textarea {
 
 :root[data-theme='light'] .modal .card {
   background: #ffffff;
+}
+
+:root[data-theme='light'] .modal.card {
+  background: #ffffff;
+}
+
+.extra-fields-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: nowrap;
+}
+
+.extra-fields-row .field {
+  flex: 1 1 0;
 }
 
 :root[data-theme='light'] .vehicle-card {
