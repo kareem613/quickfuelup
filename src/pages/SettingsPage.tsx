@@ -586,7 +586,7 @@ export default function SettingsPage() {
                       <div className="field">
                         <label>Passcode</label>
                         <input
-                          type="password"
+                          type="text"
                           value={importPasscode}
                           onChange={(e) => setImportPasscode(e.target.value)}
                           autoCapitalize="none"
@@ -655,7 +655,7 @@ export default function SettingsPage() {
                   <div className="field">
                     <label>Passcode</label>
                     <input
-                      type="password"
+                      type="text"
                       value={sharePasscode}
                       onChange={(e) => {
                         setSharePasscode(e.target.value)
