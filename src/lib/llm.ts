@@ -68,7 +68,7 @@ export async function extractServiceFromDocumentWithFallback(params: {
   providers: ProviderWithKey[]
   images?: Blob[]
   documentText?: string
-  vehicles: { id: number; name: string }[]
+  vehicles: { id: number; name: string; vin?: string }[]
   extraFieldNamesByRecordType?: Record<string, string[]>
   onThinking?: (message: string) => void
   onDebugEvent?: (event: LlmDebugEvent) => void

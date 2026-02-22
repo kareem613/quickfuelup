@@ -50,6 +50,7 @@ export type Vehicle = {
   id: number
   name: string
   imageLocation?: string
+  vin?: string
 }
 
 export type ServiceLikeRecordType = 'service' | 'repair' | 'upgrade'

@@ -155,12 +155,12 @@ export async function extractServiceFromDocumentAnthropic(params: {
   model?: string
   images?: Blob[]
   documentText?: string
-  vehicles: { id: number; name: string }[]
+  vehicles: { id: number; name: string; vin?: string }[]
   extraFieldNamesByRecordType?: Record<string, string[]>
   onThinking?: (message: string) => void
   onDebugEvent?: (event: LlmDebugEvent) => void
 }) {
-  const vehiclesText = params.vehicles.map((v) => `- ${v.id}: ${v.name}`).join('\n')
+  const vehiclesText = params.vehicles.map((v) => `- ${v.id}: ${v.name}${v.vin ? ` (VIN: ${v.vin})` : ''}`).join('\n')
   const extraFieldsText = params.extraFieldNamesByRecordType
     ? Object.entries(params.extraFieldNamesByRecordType)
         .map(([k, names]) => `- ${k}: ${names.length ? names.join(', ') : '(none configured)'}`)
