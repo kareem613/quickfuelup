@@ -10,7 +10,7 @@ import { extractServiceFromDocumentWithFallback } from '../lib/llm'
 import type { LlmDebugEvent } from '../lib/llmDebug'
 import { addServiceLikeRecord, getExtraFields, getVehicles, uploadDocuments } from '../lib/lubelogger'
 import { pdfToTextAndImages } from '../lib/pdf'
-import type { ServiceDraft, ServiceDraftRecord, ServiceLikeRecordType, Vehicle } from '../lib/types'
+import type { ServiceDraft, ServiceDraftRecord, ServiceExtractionWarning, ServiceLikeRecordType, Vehicle } from '../lib/types'
 import { InvoiceStep } from './newServiceRecord/InvoiceStep'
 import { ExtractStep } from './newServiceRecord/ExtractStep'
 import { VehicleStep } from './newServiceRecord/VehicleStep'
@@ -58,6 +58,8 @@ function normalizeToISODate(input: string | null | undefined): string | null {
   if (Number.isFinite(d.getTime())) return d.toISOString().slice(0, 10)
   return null
 }
+
+type UiWarning = { title: string; detail: string }
 
 function DoneIcon() {
   return (
@@ -291,6 +293,55 @@ export default function NewServiceRecordPage() {
   )
   const extractedWarnings = draft.extracted?.warnings ?? []
   const keepExtractOpen = extractFailed || extractedWarnings.length > 0
+
+  function parsedRecordWarning(w: ServiceExtractionWarning): { recordIdx: number; field: string } | null {
+    const m = w.path.match(/^\/records\/(\d+)\/(.+)$/)
+    if (!m) return null
+    const recordIdx = Number(m[1])
+    if (!Number.isFinite(recordIdx)) return null
+    return { recordIdx, field: m[2] ?? '' }
+  }
+
+  function warningDetail(w: ServiceExtractionWarning) {
+    const msg = typeof w.message === 'string' ? w.message.trim() : ''
+    return msg ? `${w.reason} — ${msg}` : w.reason
+  }
+
+  function fieldLabel(field: string) {
+    return field === 'vehicleId'
+      ? 'Vehicle'
+      : field === 'recordType'
+        ? 'Record type'
+        : field === 'totalCost'
+          ? 'Total cost'
+          : field.charAt(0).toUpperCase() + field.slice(1)
+  }
+
+  const extractWarningItems: UiWarning[] = extractedWarnings.map((w) => {
+    const parsed = parsedRecordWarning(w)
+    if (!parsed) return { title: w.path, detail: warningDetail(w) }
+    return {
+      title: `Record ${parsed.recordIdx + 1} • ${fieldLabel(parsed.field)}`,
+      detail: warningDetail(w),
+    }
+  })
+
+  const vehicleWarningItems: UiWarning[] = extractedWarnings
+    .filter((w) => /^\/records\/\d+\/vehicleId$/.test(w.path))
+    .map((w) => {
+      const parsed = parsedRecordWarning(w)
+      return { title: parsed ? `Record ${parsed.recordIdx + 1}` : 'Vehicle', detail: warningDetail(w) }
+    })
+
+  function warningItemsForRecord(recordIdx: number): UiWarning[] {
+    return extractedWarnings
+      .map((w) => ({ w, parsed: parsedRecordWarning(w) }))
+      .filter((x) => x.parsed && x.parsed.recordIdx === recordIdx && x.parsed.field !== 'vehicleId')
+      .map(({ w, parsed }) => ({
+        title: fieldLabel(parsed!.field),
+        detail: warningDetail(w),
+      }))
+  }
 
   function hasWarningForRecordField(recordIdx: number, field: string) {
     return extractedWarnings.some((w) => w.path === `/records/${recordIdx}/${field}`)
@@ -739,6 +790,7 @@ export default function NewServiceRecordPage() {
         submitBusy={submitBusy}
         extractFailed={extractFailed}
         extractMessage={extractMessage}
+        warningItems={extractWarningItems}
         keepOpen={keepExtractOpen}
         onToggle={() => {
           if (!step1Done) return
@@ -770,6 +822,7 @@ export default function NewServiceRecordPage() {
         vehicles={vehicles}
         selectedVehicleId={draft.vehicleId}
         anyVehicleWarning={anyVehicleIdWarning}
+        warningItems={vehicleWarningItems}
         busy={busy}
         submitBusy={submitBusy}
         onToggle={() => {
@@ -838,6 +891,7 @@ export default function NewServiceRecordPage() {
         updateRecord={updateRecord}
         updateRecordAndClearWarnings={updateRecordAndClearWarnings}
         hasWarningForRecordField={hasWarningForRecordField}
+        warningItemsForRecord={warningItemsForRecord}
         doneIcon={<DoneIcon />}
       />
 
