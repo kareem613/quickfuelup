@@ -176,7 +176,9 @@ export default function NewServiceRecordPage() {
 
   const extraFieldNamesByRecordType = useMemo(() => {
     const out: Record<string, string[]> = {}
+    const allow = new Set(['ServiceRecord', 'RepairRecord', 'UpgradeRecord'])
     for (const r of extraFieldDefs) {
+      if (!allow.has(r.recordType)) continue
       out[r.recordType] = (r.extraFields ?? []).map((x) => x.name).filter(Boolean)
     }
     return out
