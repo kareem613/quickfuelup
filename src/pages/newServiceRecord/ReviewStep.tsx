@@ -2,6 +2,22 @@ import type { ReactNode } from 'react'
 import type { ServiceDraftRecord, ServiceLikeRecordType } from '../../lib/types'
 import { ExtraFieldsBox } from './ExtraFieldsBox'
 
+function TrashIcon() {
+  return (
+    <span className="status-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none">
+        <path
+          d="M9 3h6m-7 4h8m-9 0 1 14h8l1-14M10 10v8M14 10v8"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  )
+}
+
 export function ReviewStep(props: {
   step1Done: boolean
   step2Done: boolean
@@ -9,9 +25,7 @@ export function ReviewStep(props: {
   draftDate: string
   records: ServiceDraftRecord[]
   submitBusy: boolean
-  extractBusy: boolean
-  docBusy: boolean
-  onStartOver: () => void
+  onDeleteRecord: (recordId: string) => void
   numberOrEmpty: (n: number | undefined) => string
   requiredExtraFieldsFor: (t: ServiceLikeRecordType | undefined) => string[]
   recordCanSubmit: (r: ServiceDraftRecord) => boolean
@@ -24,7 +38,6 @@ export function ReviewStep(props: {
     fn: (r: ServiceDraftRecord) => ServiceDraftRecord
   }) => void
   hasWarningForRecordField: (recordIdx: number, field: string) => boolean
-  onSubmitRecord: (id: string) => void
   doneIcon: ReactNode
 }) {
   return (
@@ -65,7 +78,25 @@ export function ReviewStep(props: {
           <div key={r.id} className="card stack" style={{ padding: 14 }}>
             <div className="row">
               <strong>Record {idx + 1}</strong>
-              {isSubmitted ? props.doneIcon : <span className="muted">{r.status === 'failed' ? 'Needs attention' : 'Pending'}</span>}
+              <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                {isSubmitted ? (
+                  props.doneIcon
+                ) : (
+                  <span className="muted">{r.status === 'failed' ? 'Needs attention' : 'Pending'}</span>
+                )}
+                {!isSubmitted ? (
+                  <button
+                    className="icon-btn"
+                    type="button"
+                    onClick={() => props.onDeleteRecord(r.id)}
+                    disabled={props.submitBusy}
+                    aria-label="Delete record"
+                    title="Delete record"
+                  >
+                    <TrashIcon />
+                  </button>
+                ) : null}
+              </div>
             </div>
 
             {r.submitError ? (
@@ -211,24 +242,6 @@ export function ReviewStep(props: {
             />
 
             {attempted && !props.recordCanSubmit(r) ? <div className="error">Some fields are missing or invalid.</div> : null}
-            <div className="actions">
-              <button
-                className="btn primary"
-                disabled={props.submitBusy || props.extractBusy || props.docBusy || isSubmitted}
-                onClick={() => props.onSubmitRecord(r.id)}
-                type="button"
-              >
-                {r.status === 'submitting' ? 'Submitting…' : isSubmitted ? 'Submitted' : 'Submit to LubeLogger'}
-              </button>
-              <button
-                className="btn"
-                disabled={props.submitBusy || props.extractBusy || props.docBusy}
-                onClick={props.onStartOver}
-                type="button"
-              >
-                Start over
-              </button>
-            </div>
           </div>
         )
       })}
