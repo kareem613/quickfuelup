@@ -15,6 +15,15 @@ export function ExtractStep(props: {
   doneIcon: ReactNode
   refreshIcon: ReactNode
 }) {
+  const statusText =
+    !props.step1Done || props.extractMessage
+      ? null
+      : props.extracting
+        ? 'Extracting records. This can take a minute.'
+        : !props.stepDone
+          ? 'Starting…'
+          : null
+
   return (
     <div
       className={`card stack${props.extracting ? ' extracting' : ''}${props.stepDone && !props.open ? ' collapsed' : ''}`}
@@ -30,9 +39,7 @@ export function ExtractStep(props: {
       ) : (
         <>
           <div className="row" style={{ justifyContent: 'space-between' }}>
-            <div className="muted">
-              {props.extracting ? 'Extracting records. This can take a minute.' : props.stepDone ? 'Done.' : 'Starting…'}
-            </div>
+            {statusText ? <div className="muted">{statusText}</div> : <span />}
             <button
               className="btn small"
               disabled={!props.canExtractAny || props.extracting || props.submitBusy}
@@ -64,4 +71,3 @@ export function ExtractStep(props: {
     </div>
   )
 }
-
