@@ -25,7 +25,7 @@ export function DetailsStep(props: {
     <div className="card stack" style={{ opacity: props.canEditDetails ? 1 : 0.6 }}>
       <div className="row">
         <strong>5) Details</strong>
-        <span className="muted">{props.date}</span>
+        <span />
       </div>
 
       <div className="field">
@@ -73,4 +73,3 @@ export function DetailsStep(props: {
     </div>
   )
 }
-
