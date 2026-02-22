@@ -216,7 +216,8 @@ export default function SettingsPage() {
     setShareBusy(true)
     setShareError(null)
     try {
-      const token = await encryptConfigToToken(cfg, sharePasscode.trim())
+      // Do not share UI theme preference; keep it local to the device.
+      const token = await encryptConfigToToken({ ...cfg, uiTheme: undefined }, sharePasscode.trim())
       const url = new URL('/settings', window.location.origin)
       url.searchParams.set('cfg', token)
       setShareLink(url.toString())
@@ -616,9 +617,10 @@ export default function SettingsPage() {
                     </div>
                   ) : (
                     <>
-                      <div className="muted">
-                        This link contains encrypted AppConfig settings only (no drafts or other flags).
-                      </div>
+                       <div className="muted">
+                        This link contains encrypted AppConfig settings only (no drafts or other flags). UI theme is not
+                        shared.
+                       </div>
                       <div className="field">
                         <label>Passcode</label>
                         <input
