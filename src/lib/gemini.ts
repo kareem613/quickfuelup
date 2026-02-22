@@ -160,6 +160,10 @@ export async function extractServiceFromDocument(params: {
         .join('\n')
     : '(not provided)'
 
+  const documentTextTrimmed = params.documentText?.trim() ?? ''
+  const documentTextForPrompt = documentTextTrimmed ? documentTextTrimmed.slice(0, 12000) : '(none)'
+  const documentTextForDebug = documentTextTrimmed ? `(omitted document text; ${documentTextTrimmed.length} chars)` : '(none)'
+
   const prompt = `
  You will be given a vehicle service invoice/receipt as text and/or images.
 
@@ -194,8 +198,8 @@ ${vehiclesText}
 Configured LubeLogger extra fields by record type (prefer these names if they match):
 ${extraFieldsText}
 
-Document text (may be empty for scanned PDFs):
-${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(none)'}
+ Document text (may be empty for scanned PDFs):
+ ${documentTextForPrompt}
 
   Rules:
   - Return only valid JSON (no markdown, no backticks).
@@ -218,6 +222,8 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
    - If you cannot confidently allocate costs per record, keep the records but set some totalCost to null and explain the uncertainty in "explanation".
  - If you cannot determine a value, set it to null and briefly explain why in explanation.
 `.trim()
+
+  const debugPrompt = prompt.replace(documentTextForPrompt, documentTextForDebug)
 
   const imageBlobs = (params.images ?? []).slice(0, 3)
   const imageB64s = await Promise.all(imageBlobs.map((b) => blobToBase64(b)))
@@ -245,7 +251,7 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
         provider: 'gemini',
         payload: {
           model: name,
-          prompt,
+          prompt: debugPrompt,
           images: imageBlobs.map((b) => ({ mimeType: b.type || 'image/jpeg', size: b.size })),
           documentTextLength: params.documentText?.length ?? 0,
         },

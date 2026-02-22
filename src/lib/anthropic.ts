@@ -184,6 +184,10 @@ export async function extractServiceFromDocumentAnthropic(params: {
         .join('\n')
     : '(not provided)'
 
+  const documentTextTrimmed = params.documentText?.trim() ?? ''
+  const documentTextForPrompt = documentTextTrimmed ? documentTextTrimmed.slice(0, 12000) : '(none)'
+  const documentTextForDebug = documentTextTrimmed ? `(omitted document text; ${documentTextTrimmed.length} chars)` : '(none)'
+
   const prompt = `
  You will be given a vehicle service invoice/receipt as text and/or images.
 
@@ -218,8 +222,8 @@ ${vehiclesText}
 Configured LubeLogger extra fields by record type (prefer these names if they match):
 ${extraFieldsText}
 
-Document text (may be empty for scanned PDFs):
-${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(none)'}
+ Document text (may be empty for scanned PDFs):
+ ${documentTextForPrompt}
 
    Rules:
    - Return only valid JSON (no markdown, no backticks).
@@ -242,6 +246,8 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
    - If you cannot confidently allocate costs per record, keep the records but set some totalCost to null and explain the uncertainty in "explanation".
  - If you cannot determine a value, set it to null and briefly explain why in explanation.
 `.trim()
+
+  const debugPrompt = prompt.replace(documentTextForPrompt, documentTextForDebug)
 
   const imageBlobs = (params.images ?? []).slice(0, 3)
   const imageB64s = await Promise.all(imageBlobs.map((b) => blobToBase64(b)))
@@ -281,7 +287,7 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
       messages: [
         {
           ...body.messages[0],
-          content: [{ type: 'text', text: prompt }, ...imageBlobs.map((b) => ({ type: 'image', source: { media_type: b.type || 'image/jpeg', bytes: b.size } }))],
+          content: [{ type: 'text', text: debugPrompt }, ...imageBlobs.map((b) => ({ type: 'image', source: { media_type: b.type || 'image/jpeg', bytes: b.size } }))],
         },
       ],
     }),
