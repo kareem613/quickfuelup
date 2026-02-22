@@ -909,7 +909,7 @@ export default function SettingsPage() {
           <div className="card stack">
             <strong>Extraction (LLM)</strong>
             <div className="field">
-              <label>LLM order</label>
+              <label>LLM fallback order</label>
               <div className="stack" style={{ gap: 8 }}>
                 {activeProviders.length ? (
                   activeProviders.map((p, idx) => (
