@@ -52,7 +52,7 @@ export function VehicleStep(props: {
               <ul style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 6 }}>
                 {props.warningItems.map((w, i) => (
                   <li key={`${w.title}:${i}`}>
-                    {w.detail}
+                    <strong>Vehicle</strong>: {w.detail}
                   </li>
                 ))}
               </ul>
