@@ -638,6 +638,7 @@ export default function NewServiceRecordPage() {
     lastExtractSigRef.current = ''
     setExtractFailed(false)
     setExtractMessage(null)
+    setLlmDebug(null)
     setDraft({ date: todayISODate() })
   }
 

@@ -667,6 +667,7 @@ export default function NewEntryPage() {
         onSubmit={onSubmit}
         onStartOver={async () => {
           await clearDraft()
+          setLlmDebug(null)
           lastExtractSigRef.current = ''
           setExtractFailed(false)
           setExtractLlmMessage(null)
