@@ -194,7 +194,8 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
     try {
       const model = genAI.getGenerativeModel({
         model: name,
-        generationConfig: { responseMimeType: 'application/json' },
+        // When streaming THINK updates we must allow non-JSON text in the response.
+        generationConfig: params.onThinking ? {} : { responseMimeType: 'application/json' },
       })
 
       const parts: unknown[] = [{ text: prompt }]
