@@ -87,6 +87,7 @@ ${documentTextForPrompt}
   - \`path\` like \`/records/<index>/<fieldName>\` (e.g. \`/records/0/vehicleId\`, \`/records/1/totalCost\`)
   - \`reason\`: ONLY one of:
     - "missing" = there is not enough data to make a confident value (use \`null\` in the field)
+    - "inferred" = value is determined with confidence based on other information in the document (not a direct lookup)
     - "uncertain" = you made a best-effort guess based on partial evidence (field may be non-null)
   - Keep \`message\` short and user-friendly.
 - Record type:
