@@ -17,6 +17,20 @@ Return **only valid JSON** (no markdown, no backticks, no extra text) matching t
 }
 \`\`\`
 
+## Schema contract (must match)
+\`\`\`json
+{
+  "type": "object",
+  "required": ["odometer", "fuelQuantity", "totalCost"],
+  "properties": {
+    "odometer": { "type": ["number", "null"] },
+    "fuelQuantity": { "type": ["number", "null"] },
+    "totalCost": { "type": ["number", "null"] },
+    "explanation": { "type": ["string", "null"] }
+  }
+}
+\`\`\`
+
 ## Rules
 - Use "." as the decimal separator.
 - If you cannot determine a value, set it to \`null\` and include a short \`explanation\`.
@@ -64,6 +78,59 @@ Return **only valid JSON** (no markdown, no backticks, no extra text) matching t
   "warnings": [
     {"path": "/records/0/odometer", "reason": "uncertain", "message": "Optional"}
   ]
+}
+\`\`\`
+
+## Schema contract (must match)
+\`\`\`json
+{
+  "type": "object",
+  "required": ["records"],
+  "properties": {
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["recordType", "vehicleId", "date", "odometer", "description", "totalCost"],
+        "properties": {
+          "recordType": { "enum": ["service", "repair", "upgrade", null] },
+          "vehicleId": { "type": ["number", "null"] },
+          "date": { "type": ["string", "null"] },
+          "odometer": { "type": ["number", "null"] },
+          "description": { "type": ["string", "null"] },
+          "totalCost": { "type": ["number", "null"] },
+          "notes": { "type": ["string", "null"] },
+          "tags": { "type": ["string", "null"] },
+          "extraFields": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "object",
+              "required": ["name", "value"],
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "value": { "type": "string", "minLength": 1 }
+              }
+            }
+          },
+          "explanation": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "explanation": { "type": ["string", "null"] },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "reason"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "reason": { "enum": ["missing", "guessed", "uncertain", "conflict", "inferred"] },
+          "message": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
 }
 \`\`\`
 
