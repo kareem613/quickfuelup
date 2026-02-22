@@ -1,16 +1,28 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import TopNav from '../components/TopNav'
 import { dismissHowItWorks } from '../lib/howItWorks'
+import { getDeferredPrompt, isRunningStandalone, setDeferredPrompt } from '../lib/pwaInstall'
 
 export default function HowItWorksPage(props: { onDismiss?: () => void }) {
   const navigate = useNavigate()
   const [params] = useSearchParams()
 
   const next = params.get('next') || '/new'
+  const [installPromptReady, setInstallPromptReady] = useState(Boolean(getDeferredPrompt()))
 
   useEffect(() => {
     document.title = 'QuickFillUp - How it works'
+  }, [])
+
+  useEffect(() => {
+    const onAny = () => setInstallPromptReady(Boolean(getDeferredPrompt()))
+    window.addEventListener('beforeinstallprompt', onAny)
+    window.addEventListener('appinstalled', onAny)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onAny)
+      window.removeEventListener('appinstalled', onAny)
+    }
   }, [])
 
   return (
@@ -40,7 +52,7 @@ export default function HowItWorksPage(props: { onDismiss?: () => void }) {
               </li>
               <li>Optional: Pick which model to use for Fuel vs Service.</li>
               <li>
-                Optional: Install the app to get an icon on your home screen.
+                Optional: Install the app. <strong>Highly recommended</strong> for quick access from your home screen.
               </li>
             </ol>
           </div>
@@ -77,9 +89,31 @@ export default function HowItWorksPage(props: { onDismiss?: () => void }) {
         </div>
 
         <div className="actions">
+          {!isRunningStandalone() ? (
+            <button
+              className="btn"
+              type="button"
+              style={{ width: '100%' }}
+              disabled={!installPromptReady}
+              onClick={async () => {
+                const p = getDeferredPrompt()
+                if (!p) return
+                await p.prompt()
+                try {
+                  await p.userChoice
+                } finally {
+                  setDeferredPrompt(null)
+                  setInstallPromptReady(false)
+                }
+              }}
+            >
+              Install app
+            </button>
+          ) : null}
           <button
             className="btn primary"
             type="button"
+            style={{ width: '100%' }}
             onClick={() => {
               dismissHowItWorks()
               props.onDismiss?.()
