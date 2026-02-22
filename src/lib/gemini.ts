@@ -201,6 +201,20 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
         const streamed = await model.generateContentStream(parts as never)
         let answer = ''
         let lastThoughtSent = ''
+
+        function summarizeThoughtLine(raw: string) {
+          const firstLine = raw
+            .split('\n')
+            .map((l) => l.trim())
+            .find((l) => Boolean(l))
+          if (!firstLine) return null
+          const heading = firstLine.match(/^\*\*([^*].*?)\*\*$/)
+          if (heading) return heading[1]?.trim() || null
+          // If it looks like an incomplete heading, wait for more.
+          if (firstLine.startsWith('**') && !firstLine.endsWith('**')) return null
+          return firstLine
+        }
+
         for await (const chunk of streamed.stream) {
           const c0 = (chunk as unknown as { candidates?: Array<{ content?: { parts?: unknown[] } }> }).candidates?.[0]
           const chunkParts = c0?.content?.parts ?? []
@@ -209,11 +223,11 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
             const obj = p as Record<string, unknown>
             if (typeof obj.text !== 'string' || !obj.text) continue
             if (obj.thought === true) {
-              // Thought summaries come as distinct "thought" parts; show only the latest one.
-              const trimmed = obj.text.trim()
-              if (trimmed && trimmed !== lastThoughtSent) {
-                lastThoughtSent = trimmed
-                params.onThinking(trimmed)
+              // Thought summaries come as distinct "thought" parts; show only a single headline line.
+              const line = summarizeThoughtLine(obj.text)
+              if (line && line !== lastThoughtSent) {
+                lastThoughtSent = line
+                params.onThinking(line)
               }
             } else {
               answer += obj.text

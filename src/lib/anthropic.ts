@@ -233,6 +233,24 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
     let thinkingAcc = ''
     let textAcc = ''
     let lastThinkingSent = ''
+
+    function summarizeThinkingLine(paragraphRaw: string) {
+      const paragraph = paragraphRaw.trim()
+      if (!paragraph) return null
+      const lines = paragraph
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+      if (!lines.length) return null
+      const firstLine = lines[0] ?? ''
+      const heading = firstLine.match(/^\*\*([^*].*?)\*\*$/)
+      if (heading) return heading[1]?.trim() || null
+      if (firstLine.startsWith('**') && !firstLine.endsWith('**')) return null
+      // If we haven't seen the newline that terminates the first line yet, avoid showing partial words.
+      if (!paragraph.includes('\n') && !/[.!?:]$/.test(firstLine)) return null
+      return firstLine
+    }
+
     while (true) {
       const { value, done } = await reader.read()
       if (done) break
@@ -285,13 +303,13 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
 
             if ((deltaType === 'thinking_delta' || blockType === 'thinking') && thinkingDelta) {
               thinkingAcc += thinkingDelta
-              // Streaming thinking is a growing buffer; show only the most recent paragraph.
-              const nextThinking = thinkingAcc
+              // Streaming thinking is a growing buffer; show only the latest paragraph's headline line.
+              const nextParagraph = thinkingAcc
                 .split(/\n{2,}/)
                 .map((s) => s.trim())
                 .filter(Boolean)
                 .slice(-1)[0]
-                ?.trim()
+              const nextThinking = nextParagraph ? summarizeThinkingLine(nextParagraph) : null
               if (nextThinking && nextThinking !== lastThinkingSent) {
                 lastThinkingSent = nextThinking
                 params.onThinking(nextThinking)
