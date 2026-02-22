@@ -70,6 +70,7 @@ export default function SettingsPage() {
   const [cultureInvariant, setCultureInvariant] = useState(existing?.cultureInvariant ?? true)
   const [showSoldVehicles, setShowSoldVehicles] = useState(existing?.showSoldVehicles ?? false)
   const [uiTheme, setUiTheme] = useState<ThemePreference>(() => existing?.uiTheme ?? loadThemePreference())
+  const [llmDebugEnabled, setLlmDebugEnabled] = useState(Boolean(existing?.llmDebugEnabled))
   const [geminiOpen, setGeminiOpen] = useState(() => Boolean(geminiApiKey.trim() || geminiModelFuel.trim() || geminiModelService.trim()))
   const [anthropicOpen, setAnthropicOpen] = useState(() =>
     Boolean(anthropicApiKey.trim() || anthropicModelFuel.trim() || anthropicModelService.trim()),
@@ -134,6 +135,7 @@ export default function SettingsPage() {
           cultureInvariant,
           showSoldVehicles,
           uiTheme,
+          llmDebugEnabled,
           useProxy: false,
           llm: {
             providerOrder: activeProviders,
@@ -158,6 +160,7 @@ export default function SettingsPage() {
     setLubeLoggerApiKey(next.lubeLoggerApiKey ?? '')
     setCultureInvariant(next.cultureInvariant ?? true)
     setShowSoldVehicles(Boolean(next.showSoldVehicles))
+    setLlmDebugEnabled(Boolean(next.llmDebugEnabled))
     if (next.uiTheme) {
       setUiTheme(next.uiTheme)
       saveThemePreference(next.uiTheme)
@@ -227,7 +230,7 @@ export default function SettingsPage() {
     setShareError(null)
     try {
       // Do not share UI theme preference; keep it local to the device.
-      const token = await encryptConfigToToken({ ...cfg, uiTheme: undefined }, sharePasscode.trim())
+      const token = await encryptConfigToToken({ ...cfg, uiTheme: undefined, llmDebugEnabled: undefined }, sharePasscode.trim())
       const url = new URL('/settings', window.location.origin)
       url.searchParams.set('cfg', token)
       setShareLink(url.toString())
@@ -908,6 +911,10 @@ export default function SettingsPage() {
         <div className="stack" role="tabpanel" aria-label="LLM settings">
           <div className="card stack">
             <strong>Extraction (LLM)</strong>
+            <label className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
+              <input type="checkbox" checked={llmDebugEnabled} onChange={(e) => setLlmDebugEnabled(e.target.checked)} />
+              <span>Enable LLM debug</span>
+            </label>
             <div className="field">
               <label>LLM fallback order</label>
               <div className="stack" style={{ gap: 8 }}>

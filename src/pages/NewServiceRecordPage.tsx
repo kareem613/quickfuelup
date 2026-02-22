@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import TopNav from '../components/TopNav'
+import { LlmDebugCard } from '../components/LlmDebugCard'
 import { loadConfig } from '../lib/config'
 import { todayISODate, toMMDDYYYY } from '../lib/date'
 import { clearServiceDraft, loadServiceDraft, saveServiceDraft } from '../lib/serviceDraft'
 import { compressImage } from '../lib/image'
 import { extractServiceFromDocumentWithFallback } from '../lib/llm'
+import type { LlmDebugEvent } from '../lib/llmDebug'
+import { safeStringify } from '../lib/llmDebug'
 import { addServiceLikeRecord, getExtraFields, getVehicles, uploadDocuments } from '../lib/lubelogger'
 import { pdfToTextAndImages } from '../lib/pdf'
 import type { ServiceDraft, ServiceDraftRecord, ServiceLikeRecordType, Vehicle } from '../lib/types'
@@ -139,6 +142,7 @@ export default function NewServiceRecordPage() {
   const [submitBusy, setSubmitBusy] = useState(false)
   const [extractFailed, setExtractFailed] = useState(false)
   const [extractMessage, setExtractMessage] = useState<string | null>(null)
+  const [llmDebug, setLlmDebug] = useState<{ request: string; response: string } | null>(null)
   const [forceExtractTick, setForceExtractTick] = useState(0)
   const lastForceExtractTickRef = useRef(0)
   const lastExtractSigRef = useRef<string>('')
@@ -368,8 +372,28 @@ export default function NewServiceRecordPage() {
       setError(null)
       setExtractFailed(false)
       setExtractMessage(null)
+      const debugEnabled = Boolean(cfg?.llmDebugEnabled)
+      if (debugEnabled) setLlmDebug({ request: '', response: '' })
+      else setLlmDebug(null)
 
       try {
+        const onDebugEvent = debugEnabled
+          ? (evt: LlmDebugEvent) => {
+              setLlmDebug((prev) => {
+                const next = prev ?? { request: '', response: '' }
+                if (evt.type === 'request') {
+                  return {
+                    request: `provider: ${evt.provider}\n\n${safeStringify(evt.payload)}`,
+                    response: next.response ? `${next.response}\n\n---\n` : '',
+                  }
+                }
+                if (evt.type === 'chunk') return { ...next, response: `${next.response}${evt.chunk}\n` }
+                if (evt.type === 'response') return { ...next, response: `${next.response}\n\n${safeStringify(evt.payload)}` }
+                return { ...next, response: `${next.response}\n\nERROR: ${evt.error}` }
+              })
+            }
+          : undefined
+
         const extracted = await extractServiceFromDocumentWithFallback({
           providers: providersWithKeys,
           images: draft.documentImages?.slice(0, 3),
@@ -377,6 +401,7 @@ export default function NewServiceRecordPage() {
           vehicles,
           extraFieldNamesByRecordType,
           onThinking: (m) => setExtractMessage(m),
+          onDebugEvent,
         })
 
         setExtractMessage(extracted.explanation?.trim() ? extracted.explanation.trim() : 'Extraction complete.')
@@ -754,6 +779,8 @@ export default function NewServiceRecordPage() {
         doneIcon={<DoneIcon />}
         refreshIcon={<RefreshIcon />}
       />
+
+      {cfg?.llmDebugEnabled && llmDebug ? <LlmDebugCard request={llmDebug.request} response={llmDebug.response} /> : null}
 
       <VehicleStep
         step1Done={step1Done}

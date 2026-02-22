@@ -1,5 +1,7 @@
 import { ExtractionSchema, parseJsonFromText } from './extraction'
 import { ServiceExtractionResultSchema } from './serviceExtraction'
+import type { LlmDebugEvent } from './llmDebug'
+import { toPlainJson } from './llmDebug'
 
 async function blobToBase64(blob: Blob): Promise<string> {
   const arrayBuffer = await blob.arrayBuffer()
@@ -14,6 +16,7 @@ export async function extractFromImagesAnthropic(params: {
   model?: string
   pumpImage: Blob
   odometerImage: Blob
+  onDebugEvent?: (event: LlmDebugEvent) => void
 }) {
   const prompt = `
  You will be given two photos:
@@ -40,6 +43,42 @@ Rules:
     blobToBase64(params.odometerImage),
   ])
 
+  const body = {
+    model: params.model?.trim() || 'claude-haiku-4-5',
+    max_tokens: 300,
+    ...(params.onDebugEvent ? { stream: true } : null),
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: params.pumpImage.type || 'image/jpeg',
+              data: pumpB64,
+            },
+          },
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: params.odometerImage.type || 'image/jpeg',
+              data: odoB64,
+            },
+          },
+        ],
+      },
+    ],
+  }
+
+  params.onDebugEvent?.({
+    type: 'request',
+    provider: 'anthropic',
+    payload: toPlainJson({ ...body, messages: [{ ...body.messages[0], content: [{ type: 'text', text: prompt }, { type: 'image', source: { media_type: params.pumpImage.type || 'image/jpeg', bytes: params.pumpImage.size } }, { type: 'image', source: { media_type: params.odometerImage.type || 'image/jpeg', bytes: params.odometerImage.size } }] }] }),
+  })
+
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -48,54 +87,77 @@ Rules:
       'anthropic-dangerous-direct-browser-access': 'true',
       'x-api-key': params.apiKey,
     },
-    body: JSON.stringify({
-      model: params.model?.trim() || 'claude-haiku-4-5',
-      max_tokens: 300,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: prompt },
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: params.pumpImage.type || 'image/jpeg',
-                data: pumpB64,
-              },
-            },
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: params.odometerImage.type || 'image/jpeg',
-                data: odoB64,
-              },
-            },
-          ],
-        },
-      ],
-    }),
+    body: JSON.stringify(body),
   })
 
-  const text = (await res.text()).trim()
-  if (!res.ok) throw new Error(`Anthropic HTTP ${res.status}: ${text}`)
+  if (!res.ok) {
+    const text = (await res.text()).trim()
+    throw new Error(`Anthropic HTTP ${res.status}: ${text}`)
+  }
 
-  const data = JSON.parse(text) as unknown
-  const content =
-    typeof data === 'object' && data !== null && Array.isArray((data as Record<string, unknown>).content)
-      ? ((data as Record<string, unknown>).content as unknown[])
-      : []
-  const joined = content
-    .map((c) => {
-      if (typeof c !== 'object' || c === null) return null
-      const obj = c as Record<string, unknown>
-      if (obj.type !== 'text') return null
-      return typeof obj.text === 'string' ? obj.text : null
-    })
-    .filter((t): t is string => Boolean(t))
-    .join('\n')
-    .trim()
+  let joined = ''
+  if (params.onDebugEvent) {
+    if (!res.body) throw new Error('Anthropic stream body missing.')
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buf = ''
+    let textAcc = ''
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+      while (true) {
+        const sep = buf.indexOf('\n\n')
+        if (sep === -1) break
+        const rawEvent = buf.slice(0, sep)
+        buf = buf.slice(sep + 2)
+        const dataLines = rawEvent
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l.startsWith('data:'))
+          .map((l) => l.slice('data:'.length).trim())
+          .filter(Boolean)
+        if (!dataLines.length) continue
+
+        for (const dataStr of dataLines) {
+          if (dataStr === '[DONE]') continue
+          params.onDebugEvent({ type: 'chunk', provider: 'anthropic', chunk: `data: ${dataStr}` })
+          let evt: unknown
+          try {
+            evt = JSON.parse(dataStr)
+          } catch {
+            continue
+          }
+          if (typeof evt !== 'object' || evt === null) continue
+          const obj = evt as Record<string, unknown>
+          if (obj.type === 'content_block_delta') {
+            const delta = typeof obj.delta === 'object' && obj.delta !== null ? (obj.delta as Record<string, unknown>) : null
+            const textDelta = delta && typeof delta.text === 'string' ? delta.text : ''
+            if (textDelta) textAcc += textDelta
+          }
+        }
+      }
+    }
+    joined = textAcc.trim()
+    params.onDebugEvent({ type: 'response', provider: 'anthropic', payload: { text: joined } })
+  } else {
+    const text = (await res.text()).trim()
+    const data = JSON.parse(text) as unknown
+    const content =
+      typeof data === 'object' && data !== null && Array.isArray((data as Record<string, unknown>).content)
+        ? ((data as Record<string, unknown>).content as unknown[])
+        : []
+    joined = content
+      .map((c) => {
+        if (typeof c !== 'object' || c === null) return null
+        const obj = c as Record<string, unknown>
+        if (obj.type !== 'text') return null
+        return typeof obj.text === 'string' ? obj.text : null
+      })
+      .filter((t): t is string => Boolean(t))
+      .join('\n')
+      .trim()
+  }
 
   if (!joined) throw new Error('Anthropic did not return text.')
 
@@ -113,6 +175,7 @@ export async function extractServiceFromDocumentAnthropic(params: {
   vehicles: { id: number; name: string }[]
   extraFieldNamesByRecordType?: Record<string, string[]>
   onThinking?: (message: string) => void
+  onDebugEvent?: (event: LlmDebugEvent) => void
 }) {
   const vehiclesText = params.vehicles.map((v) => `- ${v.id}: ${v.name}`).join('\n')
   const extraFieldsText = params.extraFieldNamesByRecordType
@@ -195,6 +258,35 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
     })
   }
 
+  const body = {
+    model: params.model?.trim() || 'claude-haiku-4-5',
+    // When extended thinking is enabled, max_tokens must be > thinking.budget_tokens.
+    max_tokens: 2048,
+    ...(params.onThinking || params.onDebugEvent
+      ? {
+          stream: true,
+          // Extended thinking: stream only the thinking block to the UI.
+          ...(params.onThinking ? { thinking: { type: 'enabled', budget_tokens: 1024 } } : null),
+        }
+      : null),
+    messages: [{ role: 'user', content }],
+  }
+
+  params.onDebugEvent?.({
+    type: 'request',
+    provider: 'anthropic',
+    payload: toPlainJson({
+      ...body,
+      // avoid embedding base64 in debug payload
+      messages: [
+        {
+          ...body.messages[0],
+          content: [{ type: 'text', text: prompt }, ...imageBlobs.map((b) => ({ type: 'image', source: { media_type: b.type || 'image/jpeg', bytes: b.size } }))],
+        },
+      ],
+    }),
+  })
+
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -203,19 +295,7 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
       'anthropic-dangerous-direct-browser-access': 'true',
       'x-api-key': params.apiKey,
     },
-    body: JSON.stringify({
-      model: params.model?.trim() || 'claude-haiku-4-5',
-      // When extended thinking is enabled, max_tokens must be > thinking.budget_tokens.
-      max_tokens: 2048,
-      ...(params.onThinking
-        ? {
-            stream: true,
-            // Extended thinking: stream only the thinking block to the UI.
-            thinking: { type: 'enabled', budget_tokens: 1024 },
-          }
-        : null),
-      messages: [{ role: 'user', content }],
-    }),
+    body: JSON.stringify(body),
   })
 
   if (!res.ok) {
@@ -224,7 +304,7 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
   }
 
   let joined = ''
-  if (params.onThinking) {
+  if (params.onThinking || params.onDebugEvent) {
     if (!res.body) throw new Error('Anthropic stream body missing.')
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
@@ -270,6 +350,7 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
 
         for (const dataStr of dataLines) {
           if (dataStr === '[DONE]') continue
+          if (params.onDebugEvent) params.onDebugEvent({ type: 'chunk', provider: 'anthropic', chunk: `data: ${dataStr}` })
           let evt: unknown
           try {
             evt = JSON.parse(dataStr)
@@ -312,7 +393,7 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
               const nextThinking = nextParagraph ? summarizeThinkingLine(nextParagraph) : null
               if (nextThinking && nextThinking !== lastThinkingSent) {
                 lastThinkingSent = nextThinking
-                params.onThinking(nextThinking)
+                params.onThinking?.(nextThinking)
               }
             } else if ((deltaType === 'text_delta' || blockType === 'text') && textDelta) {
               textAcc += textDelta
@@ -322,6 +403,7 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
       }
     }
     joined = textAcc.trim()
+    if (params.onDebugEvent) params.onDebugEvent({ type: 'response', provider: 'anthropic', payload: { text: joined } })
   } else {
     const text = (await res.text()).trim()
     const data = JSON.parse(text) as unknown

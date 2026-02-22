@@ -9,6 +9,8 @@ export type AppConfig = {
   // When false/undefined, sold vehicles are hidden from pickers.
   showSoldVehicles?: boolean
   uiTheme?: ThemePreference
+  // When enabled, show an in-app LLM debug panel during extraction.
+  llmDebugEnabled?: boolean
   useProxy: boolean
   llm: {
     providerOrder: LlmProvider[]

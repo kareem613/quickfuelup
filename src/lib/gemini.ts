@@ -1,5 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { ExtractionSchema, parseJsonFromText } from './extraction'
+import type { LlmDebugEvent } from './llmDebug'
+import { safeStringify, toPlainJson } from './llmDebug'
 import { ServiceExtractionResultSchema } from './serviceExtraction'
 
 async function blobToBase64(blob: Blob): Promise<string> {
@@ -15,6 +17,7 @@ export async function extractFromImages(params: {
   model?: string
   pumpImage: Blob
   odometerImage: Blob
+  onDebugEvent?: (event: LlmDebugEvent) => void
 }) {
   const genAI = new GoogleGenerativeAI(params.apiKey)
   // Gemini model names vary by account/API version; try a small, explicit fallback list.
@@ -61,13 +64,53 @@ Rules:
         // When supported, this makes the SDK return JSON without extra text.
         generationConfig: { responseMimeType: 'application/json' },
       })
-      const result = await model.generateContent([
+
+      const requestParts = [
         { text: prompt },
         { inlineData: { data: pumpB64, mimeType: params.pumpImage.type || 'image/jpeg' } },
         { inlineData: { data: odoB64, mimeType: params.odometerImage.type || 'image/jpeg' } },
-      ])
+      ]
 
-      const text = result.response.text().trim()
+      params.onDebugEvent?.({
+        type: 'request',
+        provider: 'gemini',
+        payload: {
+          model: name,
+          prompt,
+          images: [
+            { mimeType: params.pumpImage.type || 'image/jpeg', size: params.pumpImage.size },
+            { mimeType: params.odometerImage.type || 'image/jpeg', size: params.odometerImage.size },
+          ],
+        },
+      })
+
+      let text = ''
+      if (params.onDebugEvent) {
+        const streamed = await model.generateContentStream(requestParts as never)
+        let answer = ''
+        for await (const chunk of streamed.stream) {
+          params.onDebugEvent?.({ type: 'chunk', provider: 'gemini', chunk: safeStringify(toPlainJson(chunk), 0) })
+          const c0 = (chunk as unknown as { candidates?: Array<{ content?: { parts?: unknown[] } }> }).candidates?.[0]
+          const chunkParts = c0?.content?.parts ?? []
+          for (const p of chunkParts) {
+            if (typeof p !== 'object' || p === null) continue
+            const obj = p as Record<string, unknown>
+            if (typeof obj.text !== 'string' || !obj.text) continue
+            answer += obj.text
+          }
+        }
+        text = answer.trim()
+        try {
+          const resp = await streamed.response
+          params.onDebugEvent?.({ type: 'response', provider: 'gemini', payload: toPlainJson(resp) })
+        } catch {
+          // ignore
+        }
+      } else {
+        const result = await model.generateContent(requestParts as never)
+        text = result.response.text().trim()
+      }
+
       const json = parseJsonFromText(text, 'Gemini did not return JSON')
       const parsed = ExtractionSchema.safeParse(json)
       if (!parsed.success) throw new Error(`Gemini response did not match schema: ${text}`)
@@ -94,6 +137,7 @@ export async function extractServiceFromDocument(params: {
   vehicles: { id: number; name: string }[]
   extraFieldNamesByRecordType?: Record<string, string[]>
   onThinking?: (message: string) => void
+  onDebugEvent?: (event: LlmDebugEvent) => void
 }) {
   const genAI = new GoogleGenerativeAI(params.apiKey)
   const modelNames = [
@@ -196,8 +240,19 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
         })
       }
 
+      params.onDebugEvent?.({
+        type: 'request',
+        provider: 'gemini',
+        payload: {
+          model: name,
+          prompt,
+          images: imageBlobs.map((b) => ({ mimeType: b.type || 'image/jpeg', size: b.size })),
+          documentTextLength: params.documentText?.length ?? 0,
+        },
+      })
+
       let text = ''
-      if (params.onThinking) {
+      if (params.onThinking || params.onDebugEvent) {
         const streamed = await model.generateContentStream(parts as never)
         let answer = ''
         let lastThoughtSent = ''
@@ -216,6 +271,9 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
         }
 
         for await (const chunk of streamed.stream) {
+          if (params.onDebugEvent) {
+            params.onDebugEvent({ type: 'chunk', provider: 'gemini', chunk: safeStringify(toPlainJson(chunk), 0) })
+          }
           const c0 = (chunk as unknown as { candidates?: Array<{ content?: { parts?: unknown[] } }> }).candidates?.[0]
           const chunkParts = c0?.content?.parts ?? []
           for (const p of chunkParts) {
@@ -227,7 +285,7 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
               const line = summarizeThoughtLine(obj.text)
               if (line && line !== lastThoughtSent) {
                 lastThoughtSent = line
-                params.onThinking(line)
+                params.onThinking?.(line)
               }
             } else {
               answer += obj.text
@@ -235,6 +293,14 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
           }
         }
         text = answer.trim()
+        if (params.onDebugEvent) {
+          try {
+            const resp = await streamed.response
+            params.onDebugEvent({ type: 'response', provider: 'gemini', payload: toPlainJson(resp) })
+          } catch {
+            // ignore
+          }
+        }
       } else {
         const result = await model.generateContent(parts as never)
         text = result.response.text().trim()

@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import TopNav from '../components/TopNav'
+import { LlmDebugCard } from '../components/LlmDebugCard'
 import { loadConfig } from '../lib/config'
 import { toMMDDYYYY, todayISODate } from '../lib/date'
 import { clearDraft, loadDraft, saveDraft } from '../lib/draft'
 import { compressImage } from '../lib/image'
 import { extractFromImagesWithFallback } from '../lib/llm'
+import type { LlmDebugEvent } from '../lib/llmDebug'
+import { safeStringify } from '../lib/llmDebug'
 import { addGasRecord, getVehicles } from '../lib/lubelogger'
 import type { Draft, Vehicle } from '../lib/types'
 import { VehicleSelectStep } from './newEntry/VehicleSelectStep'
@@ -143,6 +146,7 @@ export default function NewEntryPage() {
   const [submitValidationMessage, setSubmitValidationMessage] = useState<string | null>(null)
   const [extractFailed, setExtractFailed] = useState(false)
   const [extractLlmMessage, setExtractLlmMessage] = useState<string | null>(null)
+  const [llmDebug, setLlmDebug] = useState<{ request: string; response: string } | null>(null)
   const [forceExtractTick, setForceExtractTick] = useState(0)
   const lastForceExtractTickRef = useRef(0)
   const lastExtractSigRef = useRef<string>('')
@@ -314,11 +318,32 @@ export default function NewEntryPage() {
       setError(null)
       setExtractFailed(false)
       setExtractLlmMessage(null)
+      const debugEnabled = Boolean(cfg?.llmDebugEnabled)
+      if (debugEnabled) setLlmDebug({ request: '', response: '' })
+      else setLlmDebug(null)
       try {
+        const onDebugEvent = debugEnabled
+          ? (evt: LlmDebugEvent) => {
+              setLlmDebug((prev) => {
+                const next = prev ?? { request: '', response: '' }
+                if (evt.type === 'request') {
+                  return {
+                    request: `provider: ${evt.provider}\n\n${safeStringify(evt.payload)}`,
+                    response: next.response ? `${next.response}\n\n---\n` : '',
+                  }
+                }
+                if (evt.type === 'chunk') return { ...next, response: `${next.response}${evt.chunk}\n` }
+                if (evt.type === 'response') return { ...next, response: `${next.response}\n\n${safeStringify(evt.payload)}` }
+                return { ...next, response: `${next.response}\n\nERROR: ${evt.error}` }
+              })
+            }
+          : undefined
+
         const extracted = await extractFromImagesWithFallback({
           providers: providersWithKeys,
           pumpImage: draft.pumpImage!,
           odometerImage: draft.odometerImage!,
+          onDebugEvent,
         })
 
         if (
@@ -565,6 +590,8 @@ export default function NewEntryPage() {
         cameraIcon={<CameraIcon />}
         fileIcon={<FileIcon />}
       />
+
+      {cfg?.llmDebugEnabled && llmDebug ? <LlmDebugCard request={llmDebug.request} response={llmDebug.response} /> : null}
 
       <FuelingStep
         canEditDetails={canEditDetails}
