@@ -285,7 +285,13 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
 
             if ((deltaType === 'thinking_delta' || blockType === 'thinking') && thinkingDelta) {
               thinkingAcc += thinkingDelta
-              const nextThinking = thinkingAcc.trim()
+              // Streaming thinking is a growing buffer; show only the most recent paragraph.
+              const nextThinking = thinkingAcc
+                .split(/\n{2,}/)
+                .map((s) => s.trim())
+                .filter(Boolean)
+                .slice(-1)[0]
+                ?.trim()
               if (nextThinking && nextThinking !== lastThinkingSent) {
                 lastThinkingSent = nextThinking
                 params.onThinking(nextThinking)

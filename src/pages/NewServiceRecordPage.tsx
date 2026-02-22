@@ -378,7 +378,7 @@ export default function NewServiceRecordPage() {
           onThinking: (m) => setExtractMessage(m),
         })
 
-        if (extracted.explanation) setExtractMessage(extracted.explanation)
+        setExtractMessage(extracted.explanation?.trim() ? extracted.explanation.trim() : 'Extraction complete.')
 
         const anySuggestedVehicle = extracted.records
           .map((r) => r.vehicleId)

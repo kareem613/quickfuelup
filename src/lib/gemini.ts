@@ -199,9 +199,8 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
       let text = ''
       if (params.onThinking) {
         const streamed = await model.generateContentStream(parts as never)
-        let thoughts = ''
         let answer = ''
-        let lastThoughtsSent = ''
+        let lastThoughtSent = ''
         for await (const chunk of streamed.stream) {
           const c0 = (chunk as unknown as { candidates?: Array<{ content?: { parts?: unknown[] } }> }).candidates?.[0]
           const chunkParts = c0?.content?.parts ?? []
@@ -210,10 +209,10 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
             const obj = p as Record<string, unknown>
             if (typeof obj.text !== 'string' || !obj.text) continue
             if (obj.thought === true) {
-              thoughts += obj.text
-              const trimmed = thoughts.trim()
-              if (trimmed && trimmed !== lastThoughtsSent) {
-                lastThoughtsSent = trimmed
+              // Thought summaries come as distinct "thought" parts; show only the latest one.
+              const trimmed = obj.text.trim()
+              if (trimmed && trimmed !== lastThoughtSent) {
+                lastThoughtSent = trimmed
                 params.onThinking(trimmed)
               }
             } else {
