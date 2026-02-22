@@ -940,10 +940,12 @@ export default function SettingsPage() {
 
           <div className={`card stack${geminiOpen ? '' : ' collapsed'}`}>
             <div className="row" style={{ justifyContent: 'space-between', gap: 10 }}>
-              <button className="row card-header-btn" type="button" onClick={() => setGeminiOpen((v) => !v)}>
+              <button className="row card-header-btn" type="button" onClick={() => setGeminiOpen((v) => !v)} style={{ flex: 1 }}>
                 <strong>Gemini</strong>
+                <span className="muted" style={{ marginLeft: 'auto' }}>
+                  {geminiApiKey.trim() ? 'Configured' : 'Not set'}
+                </span>
               </button>
-              <span className="muted">{geminiApiKey.trim() ? 'Configured' : 'Not set'}</span>
             </div>
             {!geminiOpen ? null : (
               <>
@@ -1043,10 +1045,12 @@ export default function SettingsPage() {
 
           <div className={`card stack${anthropicOpen ? '' : ' collapsed'}`}>
             <div className="row" style={{ justifyContent: 'space-between', gap: 10 }}>
-              <button className="row card-header-btn" type="button" onClick={() => setAnthropicOpen((v) => !v)}>
+              <button className="row card-header-btn" type="button" onClick={() => setAnthropicOpen((v) => !v)} style={{ flex: 1 }}>
                 <strong>Anthropic</strong>
+                <span className="muted" style={{ marginLeft: 'auto' }}>
+                  {anthropicApiKey.trim() ? 'Configured' : 'Not set'}
+                </span>
               </button>
-              <span className="muted">{anthropicApiKey.trim() ? 'Configured' : 'Not set'}</span>
             </div>
             {!anthropicOpen ? null : (
               <>
