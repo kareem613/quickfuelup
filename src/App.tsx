@@ -31,10 +31,6 @@ export default function App() {
         <Route path="/" element={<Navigate to="/new" replace />} />
         <Route path="*" element={<Navigate to="/new" replace />} />
       </Routes>
-
-      <footer className="app-footer muted">
-        v{__APP_VERSION__} ({__GIT_SHA__})
-      </footer>
     </>
   )
 }

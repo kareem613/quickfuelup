@@ -863,7 +863,6 @@ export default function NewServiceRecordPage() {
         </button>
       </div>
 
-      {docBusy || extractBusy ? <div className="muted">{docBusy ? 'Processing document…' : 'Extracting from document…'}</div> : null}
     </div>
   )
 }

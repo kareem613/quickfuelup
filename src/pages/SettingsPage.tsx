@@ -1148,13 +1148,6 @@ export default function SettingsPage() {
         </div>
       ) : null}
 
-      {!existing && (
-        <div className="muted">
-          Keys are stored locally in your browser. This is a client-only app; don’t use keys you can’t trust on this
-          device.
-        </div>
-      )}
-
       <button className="btn" type="button" onClick={() => navigate('/how-it-works?next=%2Fsettings')}>
         How it works
       </button>

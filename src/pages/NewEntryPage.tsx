@@ -651,9 +651,6 @@ export default function NewEntryPage() {
         }
       />
 
-      {imageBusy || extractBusy ? (
-        <div className="muted">{imageBusy ? 'Processing images…' : 'Extracting from photos…'}</div>
-      ) : null}
     </div>
   )
 }
