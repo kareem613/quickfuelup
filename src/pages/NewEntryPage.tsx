@@ -573,6 +573,7 @@ export default function NewEntryPage() {
         submitBusy={submitBusy}
         extractFailed={extractFailed}
         extractLlmMessage={extractLlmMessage}
+        hasLlmResponse={Boolean(draft.extracted) || extractFailed}
         submitAttempted={submitAttempted}
         odometerInvalid={!(typeof form.odometer === 'number' && Number.isFinite(form.odometer) && form.odometer >= 0)}
         fuelQuantityInvalid={!(typeof form.fuelconsumed === 'number' && Number.isFinite(form.fuelconsumed) && form.fuelconsumed > 0)}
