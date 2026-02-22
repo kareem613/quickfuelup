@@ -8,7 +8,6 @@ import { clearServiceDraft, loadServiceDraft, saveServiceDraft } from '../lib/se
 import { compressImage } from '../lib/image'
 import { extractServiceFromDocumentWithFallback } from '../lib/llm'
 import type { LlmDebugEvent } from '../lib/llmDebug'
-import { safeStringify } from '../lib/llmDebug'
 import { addServiceLikeRecord, getExtraFields, getVehicles, uploadDocuments } from '../lib/lubelogger'
 import { pdfToTextAndImages } from '../lib/pdf'
 import type { ServiceDraft, ServiceDraftRecord, ServiceLikeRecordType, Vehicle } from '../lib/types'
@@ -142,7 +141,7 @@ export default function NewServiceRecordPage() {
   const [submitBusy, setSubmitBusy] = useState(false)
   const [extractFailed, setExtractFailed] = useState(false)
   const [extractMessage, setExtractMessage] = useState<string | null>(null)
-  const [llmDebug, setLlmDebug] = useState<{ prompt: string; response: string } | null>(null)
+  const [llmDebug, setLlmDebug] = useState<{ prompt: string; responseRaw: string; responseJson: unknown } | null>(null)
   const [forceExtractTick, setForceExtractTick] = useState(0)
   const lastForceExtractTickRef = useRef(0)
   const lastExtractSigRef = useRef<string>('')
@@ -373,25 +372,26 @@ export default function NewServiceRecordPage() {
       setExtractFailed(false)
       setExtractMessage(null)
       const debugEnabled = Boolean(cfg?.llmDebugEnabled)
-      if (debugEnabled) setLlmDebug({ prompt: '', response: '' })
+      if (debugEnabled) setLlmDebug({ prompt: '', responseRaw: '', responseJson: null })
       else setLlmDebug(null)
 
       try {
         const onDebugEvent = debugEnabled
           ? (evt: LlmDebugEvent) => {
               setLlmDebug((prev) => {
-                const next = prev ?? { prompt: '', response: '' }
+                const next = prev ?? { prompt: '', responseRaw: '', responseJson: null }
                 if (evt.type === 'request') {
                   const payload = typeof evt.payload === 'object' && evt.payload !== null ? (evt.payload as Record<string, unknown>) : null
                   const prompt = (payload && typeof payload.prompt === 'string' ? payload.prompt : null) ?? ''
                   return {
                     prompt,
-                    response: '',
+                    responseRaw: '',
+                    responseJson: null,
                   }
                 }
-                if (evt.type === 'chunk') return { ...next, response: `${next.response}${evt.chunk}\n` }
-                if (evt.type === 'response') return { ...next, response: `${next.response}\n\n${safeStringify(evt.payload)}` }
-                return { ...next, response: `${next.response}\n\nERROR: ${evt.error}` }
+                if (evt.type === 'chunk') return { ...next, responseRaw: `${next.responseRaw}${evt.chunk}\n` }
+                if (evt.type === 'response') return { ...next, responseJson: evt.payload }
+                return { ...next, responseRaw: `${next.responseRaw}\nERROR: ${evt.error}` }
               })
             }
           : undefined
@@ -782,7 +782,9 @@ export default function NewServiceRecordPage() {
         refreshIcon={<RefreshIcon />}
       />
 
-      {cfg?.llmDebugEnabled && llmDebug ? <LlmDebugCard prompt={llmDebug.prompt} response={llmDebug.response} /> : null}
+      {cfg?.llmDebugEnabled && llmDebug ? (
+        <LlmDebugCard prompt={llmDebug.prompt} responseJson={llmDebug.responseJson} responseRaw={llmDebug.responseRaw} />
+      ) : null}
 
       <VehicleStep
         step1Done={step1Done}

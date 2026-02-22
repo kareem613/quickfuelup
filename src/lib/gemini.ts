@@ -78,18 +78,14 @@ export async function extractFromImages(params: {
           }
         }
         text = answer.trim()
-        try {
-          const resp = await streamed.response
-          params.onDebugEvent?.({ type: 'response', provider: 'gemini', payload: toPlainJson(resp) })
-        } catch {
-          // ignore
-        }
+        // Debug "response" should be the final JSON answer (rendered via JSON view).
       } else {
         const result = await model.generateContent(requestParts as never)
         text = result.response.text().trim()
       }
 
       const json = parseJsonFromText(text, 'Gemini did not return JSON')
+      params.onDebugEvent?.({ type: 'response', provider: 'gemini', payload: json })
       const parsed = ExtractionSchema.safeParse(json)
       if (!parsed.success) throw new Error(`Gemini response did not match schema: ${text}`)
       return { ...parsed.data, rawJson: json }
@@ -215,20 +211,14 @@ export async function extractServiceFromDocument(params: {
           }
         }
         text = answer.trim()
-        if (params.onDebugEvent) {
-          try {
-            const resp = await streamed.response
-            params.onDebugEvent({ type: 'response', provider: 'gemini', payload: toPlainJson(resp) })
-          } catch {
-            // ignore
-          }
-        }
+        // Debug "response" should be the final JSON answer (rendered via JSON view).
       } else {
         const result = await model.generateContent(parts as never)
         text = result.response.text().trim()
       }
 
       const json = parseJsonFromText(text, 'Gemini did not return JSON')
+      params.onDebugEvent?.({ type: 'response', provider: 'gemini', payload: json })
       const parsed = ServiceExtractionResultSchema.safeParse(json)
       if (!parsed.success) throw new Error(`Gemini response did not match schema: ${text}`)
       return { ...parsed.data, rawJson: json }

@@ -121,7 +121,8 @@ export async function extractFromImagesAnthropic(params: {
       }
     }
     joined = textAcc.trim()
-    params.onDebugEvent({ type: 'response', provider: 'anthropic', payload: { text: joined } })
+    const json = parseJsonFromText(joined, 'Anthropic did not return JSON')
+    params.onDebugEvent({ type: 'response', provider: 'anthropic', payload: json })
   } else {
     const text = (await res.text()).trim()
     const data = JSON.parse(text) as unknown
@@ -323,7 +324,10 @@ export async function extractServiceFromDocumentAnthropic(params: {
       }
     }
     joined = textAcc.trim()
-    if (params.onDebugEvent) params.onDebugEvent({ type: 'response', provider: 'anthropic', payload: { text: joined } })
+    if (params.onDebugEvent) {
+      const json = parseJsonFromText(joined, 'Anthropic did not return JSON')
+      params.onDebugEvent({ type: 'response', provider: 'anthropic', payload: json })
+    }
   } else {
     const text = (await res.text()).trim()
     const data = JSON.parse(text) as unknown

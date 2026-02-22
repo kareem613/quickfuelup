@@ -8,7 +8,6 @@ import { clearDraft, loadDraft, saveDraft } from '../lib/draft'
 import { compressImage } from '../lib/image'
 import { extractFromImagesWithFallback } from '../lib/llm'
 import type { LlmDebugEvent } from '../lib/llmDebug'
-import { safeStringify } from '../lib/llmDebug'
 import { addGasRecord, getVehicles } from '../lib/lubelogger'
 import type { Draft, Vehicle } from '../lib/types'
 import { VehicleSelectStep } from './newEntry/VehicleSelectStep'
@@ -146,7 +145,7 @@ export default function NewEntryPage() {
   const [submitValidationMessage, setSubmitValidationMessage] = useState<string | null>(null)
   const [extractFailed, setExtractFailed] = useState(false)
   const [extractLlmMessage, setExtractLlmMessage] = useState<string | null>(null)
-  const [llmDebug, setLlmDebug] = useState<{ prompt: string; response: string } | null>(null)
+  const [llmDebug, setLlmDebug] = useState<{ prompt: string; responseRaw: string; responseJson: unknown } | null>(null)
   const [forceExtractTick, setForceExtractTick] = useState(0)
   const lastForceExtractTickRef = useRef(0)
   const lastExtractSigRef = useRef<string>('')
@@ -319,24 +318,25 @@ export default function NewEntryPage() {
       setExtractFailed(false)
       setExtractLlmMessage(null)
       const debugEnabled = Boolean(cfg?.llmDebugEnabled)
-      if (debugEnabled) setLlmDebug({ prompt: '', response: '' })
+      if (debugEnabled) setLlmDebug({ prompt: '', responseRaw: '', responseJson: null })
       else setLlmDebug(null)
       try {
         const onDebugEvent = debugEnabled
           ? (evt: LlmDebugEvent) => {
               setLlmDebug((prev) => {
-                const next = prev ?? { prompt: '', response: '' }
+                const next = prev ?? { prompt: '', responseRaw: '', responseJson: null }
                 if (evt.type === 'request') {
                   const payload = typeof evt.payload === 'object' && evt.payload !== null ? (evt.payload as Record<string, unknown>) : null
                   const prompt = (payload && typeof payload.prompt === 'string' ? payload.prompt : null) ?? ''
                   return {
                     prompt,
-                    response: '',
+                    responseRaw: '',
+                    responseJson: null,
                   }
                 }
-                if (evt.type === 'chunk') return { ...next, response: `${next.response}${evt.chunk}\n` }
-                if (evt.type === 'response') return { ...next, response: `${next.response}\n\n${safeStringify(evt.payload)}` }
-                return { ...next, response: `${next.response}\n\nERROR: ${evt.error}` }
+                if (evt.type === 'chunk') return { ...next, responseRaw: `${next.responseRaw}${evt.chunk}\n` }
+                if (evt.type === 'response') return { ...next, responseJson: evt.payload }
+                return { ...next, responseRaw: `${next.responseRaw}\nERROR: ${evt.error}` }
               })
             }
           : undefined
@@ -593,7 +593,9 @@ export default function NewEntryPage() {
         fileIcon={<FileIcon />}
       />
 
-      {cfg?.llmDebugEnabled && llmDebug ? <LlmDebugCard prompt={llmDebug.prompt} response={llmDebug.response} /> : null}
+      {cfg?.llmDebugEnabled && llmDebug ? (
+        <LlmDebugCard prompt={llmDebug.prompt} responseJson={llmDebug.responseJson} responseRaw={llmDebug.responseRaw} />
+      ) : null}
 
       <FuelingStep
         canEditDetails={canEditDetails}
