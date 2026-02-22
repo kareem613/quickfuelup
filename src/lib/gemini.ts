@@ -93,6 +93,7 @@ export async function extractServiceFromDocument(params: {
   documentText?: string
   vehicles: { id: number; name: string }[]
   extraFieldNamesByRecordType?: Record<string, string[]>
+  onThinking?: (message: string) => void
 }) {
   const genAI = new GoogleGenerativeAI(params.apiKey)
   const modelNames = [
@@ -116,10 +117,10 @@ export async function extractServiceFromDocument(params: {
     : '(not provided)'
 
   const prompt = `
-You will be given a vehicle service invoice/receipt as text and/or images.
+ You will be given a vehicle service invoice/receipt as text and/or images.
 
-Your job is to create a sensible set of LubeLogger records from this document.
-This is NOT necessarily one record per line item: group logically into records that represent one service event/visit.
+ Your job is to create a sensible set of LubeLogger records from this document.
+ This is NOT necessarily one record per line item: group logically into records that represent one service event/visit.
 
  Return JSON ONLY matching this TypeScript type:
  {
@@ -153,7 +154,10 @@ Document text (may be empty for scanned PDFs):
 ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(none)'}
 
   Rules:
-  - Return only valid JSON (no markdown, no backticks).
+  - Return valid JSON (no markdown, no backticks).
+  - While working, you may emit brief progress updates as standalone lines that start with "THINK:".
+    - Keep THINK lines short (1 sentence).
+    - Do NOT include any other non-JSON text.
   - Use '.' as decimal separator.
   - Still make your best educated guess when the document strongly suggests a value (e.g. vehicleId from invoice header). Only use null when you truly cannot determine a value.
   - If any value is missing (null), guessed, uncertain, or conflicting, include a warning in "warnings" for that field.
@@ -177,6 +181,14 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
   const imageBlobs = (params.images ?? []).slice(0, 3)
   const imageB64s = await Promise.all(imageBlobs.map((b) => blobToBase64(b)))
 
+  function extractThinking(text: string) {
+    const matches = Array.from(text.matchAll(/(?:^|\n)THINK:\s*([^\n\r]*)/g))
+      .map((m) => (m[1] ?? '').trim())
+      .filter(Boolean)
+    if (!matches.length) return null
+    return matches.slice(-6).join('\n')
+  }
+
   let lastErr: unknown
   for (const name of modelNames) {
     try {
@@ -192,8 +204,27 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
         })
       }
 
-      const result = await model.generateContent(parts as never)
-      const text = result.response.text().trim()
+      let text = ''
+      if (params.onThinking) {
+        const streamed = await model.generateContentStream(parts as never)
+        let acc = ''
+        let lastThinking = ''
+        for await (const chunk of streamed.stream) {
+          const delta = chunk.text()
+          if (!delta) continue
+          acc += delta
+          const thinking = extractThinking(acc)
+          if (thinking && thinking !== lastThinking) {
+            lastThinking = thinking
+            params.onThinking(thinking)
+          }
+        }
+        text = acc.trim()
+      } else {
+        const result = await model.generateContent(parts as never)
+        text = result.response.text().trim()
+      }
+
       const json = parseJsonFromText(text, 'Gemini did not return JSON')
       const parsed = ServiceExtractionResultSchema.safeParse(json)
       if (!parsed.success) throw new Error(`Gemini response did not match schema: ${text}`)

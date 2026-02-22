@@ -375,6 +375,7 @@ export default function NewServiceRecordPage() {
           documentText: draft.documentText,
           vehicles,
           extraFieldNamesByRecordType,
+          onThinking: (m) => setExtractMessage(m),
         })
 
         if (extracted.explanation) setExtractMessage(extracted.explanation)

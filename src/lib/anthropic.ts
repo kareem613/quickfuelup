@@ -97,7 +97,7 @@ Rules:
     .join('\n')
     .trim()
 
-  if (!joined) throw new Error(`Anthropic did not return text: ${text}`)
+  if (!joined) throw new Error('Anthropic did not return text.')
 
   const json = parseJsonFromText(joined, 'Anthropic did not return JSON')
   const parsed = ExtractionSchema.safeParse(json)
@@ -112,6 +112,7 @@ export async function extractServiceFromDocumentAnthropic(params: {
   documentText?: string
   vehicles: { id: number; name: string }[]
   extraFieldNamesByRecordType?: Record<string, string[]>
+  onThinking?: (message: string) => void
 }) {
   const vehiclesText = params.vehicles.map((v) => `- ${v.id}: ${v.name}`).join('\n')
   const extraFieldsText = params.extraFieldNamesByRecordType
@@ -157,11 +158,14 @@ ${extraFieldsText}
 Document text (may be empty for scanned PDFs):
 ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(none)'}
 
-  Rules:
-  - Return only valid JSON (no markdown, no backticks).
-  - Use '.' as decimal separator.
-  - Still make your best educated guess when the document strongly suggests a value (e.g. vehicleId from invoice header). Only use null when you truly cannot determine a value.
-  - If any value is missing (null), guessed, uncertain, or conflicting, include a warning in "warnings" for that field.
+   Rules:
+   - Return valid JSON (no markdown, no backticks).
+   - While working, you may emit brief progress updates as standalone lines that start with "THINK:".
+     - Keep THINK lines short (1 sentence).
+     - Do NOT include any other non-JSON text.
+   - Use '.' as decimal separator.
+   - Still make your best educated guess when the document strongly suggests a value (e.g. vehicleId from invoice header). Only use null when you truly cannot determine a value.
+   - If any value is missing (null), guessed, uncertain, or conflicting, include a warning in "warnings" for that field.
     - Use paths like: /records/<index>/<fieldName> (e.g. /records/0/vehicleId, /records/0/odometer, /records/1/totalCost).
     - Keep warning messages short and user-friendly.
   - If you choose a recordType, choose the one that best matches the work (service=scheduled maintenance, repair=unplanned fix, upgrade=enhancement).
@@ -194,6 +198,14 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
     })
   }
 
+  function extractThinking(text: string) {
+    const matches = Array.from(text.matchAll(/(?:^|\n)THINK:\s*([^\n\r]*)/g))
+      .map((m) => (m[1] ?? '').trim())
+      .filter(Boolean)
+    if (!matches.length) return null
+    return matches.slice(-6).join('\n')
+  }
+
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -205,30 +217,86 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
     body: JSON.stringify({
       model: params.model?.trim() || 'claude-haiku-4-5',
       max_tokens: 500,
+      ...(params.onThinking ? { stream: true } : null),
       messages: [{ role: 'user', content }],
     }),
   })
 
-  const text = (await res.text()).trim()
-  if (!res.ok) throw new Error(`Anthropic HTTP ${res.status}: ${text}`)
+  if (!res.ok) {
+    const text = (await res.text()).trim()
+    throw new Error(`Anthropic HTTP ${res.status}: ${text}`)
+  }
 
-  const data = JSON.parse(text) as unknown
-  const bodyContent =
-    typeof data === 'object' && data !== null && Array.isArray((data as Record<string, unknown>).content)
-      ? ((data as Record<string, unknown>).content as unknown[])
-      : []
-  const joined = bodyContent
-    .map((c) => {
-      if (typeof c !== 'object' || c === null) return null
-      const obj = c as Record<string, unknown>
-      if (obj.type !== 'text') return null
-      return typeof obj.text === 'string' ? obj.text : null
-    })
-    .filter((t): t is string => Boolean(t))
-    .join('\n')
-    .trim()
+  let joined = ''
+  if (params.onThinking) {
+    if (!res.body) throw new Error('Anthropic stream body missing.')
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buf = ''
+    let accText = ''
+    let lastThinking = ''
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+      while (true) {
+        const sep = buf.indexOf('\n\n')
+        if (sep === -1) break
+        const rawEvent = buf.slice(0, sep)
+        buf = buf.slice(sep + 2)
+        const dataLine = rawEvent
+          .split('\n')
+          .map((l) => l.trim())
+          .find((l) => l.startsWith('data:'))
+        if (!dataLine) continue
+        const dataStr = dataLine.slice('data:'.length).trim()
+        if (!dataStr || dataStr === '[DONE]') continue
+        let evt: unknown
+        try {
+          evt = JSON.parse(dataStr)
+        } catch {
+          continue
+        }
+        if (typeof evt !== 'object' || evt === null) continue
+        const obj = evt as Record<string, unknown>
+        if (obj.type === 'content_block_delta') {
+          const delta = obj.delta
+          const deltaText =
+            typeof delta === 'object' && delta !== null && typeof (delta as Record<string, unknown>).text === 'string'
+              ? String((delta as Record<string, unknown>).text)
+              : ''
+          if (deltaText) {
+            accText += deltaText
+            const thinking = extractThinking(accText)
+            if (thinking && thinking !== lastThinking) {
+              lastThinking = thinking
+              params.onThinking(thinking)
+            }
+          }
+        }
+      }
+    }
+    joined = accText.trim()
+  } else {
+    const text = (await res.text()).trim()
+    const data = JSON.parse(text) as unknown
+    const bodyContent =
+      typeof data === 'object' && data !== null && Array.isArray((data as Record<string, unknown>).content)
+        ? ((data as Record<string, unknown>).content as unknown[])
+        : []
+    joined = bodyContent
+      .map((c) => {
+        if (typeof c !== 'object' || c === null) return null
+        const obj = c as Record<string, unknown>
+        if (obj.type !== 'text') return null
+        return typeof obj.text === 'string' ? obj.text : null
+      })
+      .filter((t): t is string => Boolean(t))
+      .join('\n')
+      .trim()
+  }
 
-  if (!joined) throw new Error(`Anthropic did not return text: ${text}`)
+  if (!joined) throw new Error('Anthropic did not return text.')
 
   const json = parseJsonFromText(joined, 'Anthropic did not return JSON')
   const parsed = ServiceExtractionResultSchema.safeParse(json)
