@@ -143,6 +143,7 @@ export default function NewServiceRecordPage() {
   const lastForceExtractTickRef = useRef(0)
   const lastExtractSigRef = useRef<string>('')
   const [successOpen, setSuccessOpen] = useState(false)
+  const [startOverConfirmOpen, setStartOverConfirmOpen] = useState(false)
 
   const vehicleTouched = useRef(false)
 
@@ -603,6 +604,15 @@ export default function NewServiceRecordPage() {
     )
   }
 
+  async function resetAll() {
+    await clearServiceDraft()
+    vehicleTouched.current = false
+    lastExtractSigRef.current = ''
+    setExtractFailed(false)
+    setExtractMessage(null)
+    setDraft({ date: todayISODate() })
+  }
+
   return (
     <div className="container stack">
       <TopNav />
@@ -663,6 +673,36 @@ export default function NewServiceRecordPage() {
             >
               OK
             </button>
+          </div>
+        </div>
+      ) : null}
+
+      {startOverConfirmOpen ? (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Start over confirmation"
+          onClick={() => setStartOverConfirmOpen(false)}
+        >
+          <div className="modal card stack" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: 0 }}>Start over?</h3>
+            <div className="muted">You haven’t submitted yet. This will reset all fields.</div>
+            <div className="actions">
+              <button
+                className="btn primary"
+                type="button"
+                onClick={async () => {
+                  setStartOverConfirmOpen(false)
+                  await resetAll()
+                }}
+              >
+                Reset
+              </button>
+              <button className="btn" type="button" onClick={() => setStartOverConfirmOpen(false)}>
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
@@ -760,15 +800,10 @@ export default function NewServiceRecordPage() {
           const hasAnything =
             Boolean(draft.document || draft.documentText || draft.documentImages?.length || draft.records?.length || draft.extracted)
           if (!anySubmitted && hasAnything) {
-            const ok = window.confirm("You haven't submitted yet. This will reset all fields. Continue?")
-            if (!ok) return
+            setStartOverConfirmOpen(true)
+            return
           }
-          await clearServiceDraft()
-          vehicleTouched.current = false
-          lastExtractSigRef.current = ''
-          setExtractFailed(false)
-          setExtractMessage(null)
-          setDraft({ date: todayISODate() })
+          await resetAll()
         }}
         numberOrEmpty={numberOrEmpty}
         requiredExtraFieldsFor={requiredExtraFieldsFor}
