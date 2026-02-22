@@ -205,12 +205,13 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
     },
     body: JSON.stringify({
       model: params.model?.trim() || 'claude-haiku-4-5',
-      max_tokens: 500,
+      // When extended thinking is enabled, max_tokens must be > thinking.budget_tokens.
+      max_tokens: 1200,
       ...(params.onThinking
         ? {
             stream: true,
             // Extended thinking: stream only the thinking block to the UI.
-            thinking: { type: 'enabled', budget_tokens: 1024 },
+            thinking: { type: 'enabled', budget_tokens: 512 },
           }
         : null),
       messages: [{ role: 'user', content }],
