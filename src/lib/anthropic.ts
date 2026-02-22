@@ -1,7 +1,6 @@
 import { ExtractionSchema, parseJsonFromText } from './extraction'
 import { ServiceExtractionResultSchema } from './serviceExtraction'
 import type { LlmDebugEvent } from './llmDebug'
-import { toPlainJson } from './llmDebug'
 import { buildFuelPrompt, buildServicePrompt } from './prompts'
 
 async function blobToBase64(blob: Blob): Promise<string> {
@@ -59,7 +58,7 @@ export async function extractFromImagesAnthropic(params: {
   params.onDebugEvent?.({
     type: 'request',
     provider: 'anthropic',
-    payload: toPlainJson({ ...body, messages: [{ ...body.messages[0], content: [{ type: 'text', text: prompt }, { type: 'image', source: { media_type: params.pumpImage.type || 'image/jpeg', bytes: params.pumpImage.size } }, { type: 'image', source: { media_type: params.odometerImage.type || 'image/jpeg', bytes: params.odometerImage.size } }] }] }),
+    payload: { prompt },
   })
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -205,16 +204,7 @@ export async function extractServiceFromDocumentAnthropic(params: {
   params.onDebugEvent?.({
     type: 'request',
     provider: 'anthropic',
-    payload: toPlainJson({
-      ...body,
-      // avoid embedding base64 in debug payload
-      messages: [
-        {
-          ...body.messages[0],
-          content: [{ type: 'text', text: debugPrompt }, ...imageBlobs.map((b) => ({ type: 'image', source: { media_type: b.type || 'image/jpeg', bytes: b.size } }))],
-        },
-      ],
-    }),
+    payload: { prompt: debugPrompt },
   })
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {

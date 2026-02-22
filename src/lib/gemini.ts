@@ -58,12 +58,7 @@ export async function extractFromImages(params: {
         type: 'request',
         provider: 'gemini',
         payload: {
-          model: name,
           prompt,
-          images: [
-            { mimeType: params.pumpImage.type || 'image/jpeg', size: params.pumpImage.size },
-            { mimeType: params.odometerImage.type || 'image/jpeg', size: params.odometerImage.size },
-          ],
         },
       })
 
@@ -143,7 +138,7 @@ export async function extractServiceFromDocument(params: {
         .join('\n')
     : '(not provided)'
 
-  const { prompt, debugPrompt, documentTextLength } = buildServicePrompt({
+  const { prompt, debugPrompt } = buildServicePrompt({
     vehiclesText,
     extraFieldsText,
     documentText: params.documentText,
@@ -174,10 +169,7 @@ export async function extractServiceFromDocument(params: {
         type: 'request',
         provider: 'gemini',
         payload: {
-          model: name,
           prompt: debugPrompt,
-          images: imageBlobs.map((b) => ({ mimeType: b.type || 'image/jpeg', size: b.size })),
-          documentTextLength,
         },
       })
 
