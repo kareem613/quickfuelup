@@ -2,6 +2,7 @@ import { ExtractionSchema, parseJsonFromText } from './extraction'
 import { ServiceExtractionResultSchema } from './serviceExtraction'
 import type { LlmDebugEvent } from './llmDebug'
 import { toPlainJson } from './llmDebug'
+import { buildFuelPrompt, buildServicePrompt } from './prompts'
 
 async function blobToBase64(blob: Blob): Promise<string> {
   const arrayBuffer = await blob.arrayBuffer()
@@ -18,25 +19,7 @@ export async function extractFromImagesAnthropic(params: {
   odometerImage: Blob
   onDebugEvent?: (event: LlmDebugEvent) => void
 }) {
-  const prompt = `
- You will be given two photos:
-1) a gas pump display OR a fuel receipt showing total cost and quantity/volume
-2) a vehicle odometer display
-
-Extract these fields and return JSON ONLY matching this TypeScript type:
-{
-  "odometer": number | null,       // integer miles/km from odometer
-  "fuelQuantity": number | null,   // numeric quantity (gallons/liters) from pump
-  "totalCost": number | null,      // numeric total cost from pump
-  "explanation"?: string | null    // if you cannot determine one or more values, explain why
-}
-
-Rules:
-- Return only valid JSON (no markdown, no backticks).
-- Use '.' as decimal separator.
-- If you cannot determine a value, set it to null AND include a short explanation.
-- If a value can't be determined from an image, describe what that image appears to be (e.g. blurry dashboard, dark photo, receipt, random object), and end with a mildly sarcastic line like: "It's a photo of <what it looks like> — how do you expect me to read <missing value> from that?"
-`.trim()
+  const prompt = buildFuelPrompt()
 
   const [pumpB64, odoB64] = await Promise.all([
     blobToBase64(params.pumpImage),
@@ -184,70 +167,11 @@ export async function extractServiceFromDocumentAnthropic(params: {
         .join('\n')
     : '(not provided)'
 
-  const documentTextTrimmed = params.documentText?.trim() ?? ''
-  const documentTextForPrompt = documentTextTrimmed ? documentTextTrimmed.slice(0, 12000) : '(none)'
-  const documentTextForDebug = documentTextTrimmed ? `(omitted document text; ${documentTextTrimmed.length} chars)` : '(none)'
-
-  const prompt = `
- You will be given a vehicle service invoice/receipt as text and/or images.
-
- Your job is to create a sensible set of LubeLogger records from this document.
- This is NOT necessarily one record per line item: group logically into records that represent one service event/visit.
-
-  Return JSON ONLY matching this TypeScript type:
-  {
-   "records": Array<{
-     "recordType": "service" | "repair" | "upgrade" | null,
-     "vehicleId": number | null,
-     "date": string | null,
-     "odometer": number | null,
-     "description": string | null,   // VERY concise summary (e.g. "AC repair", "Oil change")
-     "totalCost": number | null,
-     "notes"?: string | null,
-     "tags"?: string | null,
-     "extraFields"?: { "name": string, "value": string }[] | null,
-     "explanation"?: string | null
-   }>,
-   "explanation"?: string | null,
-   "warnings"?: Array<{
-     "path": string, // e.g. "/records/0/odometer"
-     "reason": "missing" | "guessed" | "uncertain" | "conflict",
-     "message"?: string | null
-   }>
- }
-
-Available vehicles (pick one vehicleId if confident OR if you can make a reasonable educated guess; otherwise null):
-${vehiclesText}
-
-Configured LubeLogger extra fields by record type (prefer these names if they match):
-${extraFieldsText}
-
- Document text (may be empty for scanned PDFs):
- ${documentTextForPrompt}
-
-   Rules:
-   - Return only valid JSON (no markdown, no backticks).
-   - Use '.' as decimal separator.
-   - Still make your best educated guess when the document strongly suggests a value (e.g. vehicleId from invoice header). Only use null when you truly cannot determine a value.
-   - If any value is missing (null), guessed, uncertain, or conflicting, include a warning in "warnings" for that field.
-    - Use paths like: /records/<index>/<fieldName> (e.g. /records/0/vehicleId, /records/0/odometer, /records/1/totalCost).
-    - Keep warning messages short and user-friendly.
-  - If you choose a recordType, choose the one that best matches the work (service=scheduled maintenance, repair=unplanned fix, upgrade=enhancement).
-  - Create between 1 and 8 records; prefer fewer records unless there are clearly distinct visits/dates/vehicles.
-  - Do not produce a record for every part.
-  - Keep "description" VERY concise (2-6 words). Put the detailed work performed (parts/labor/steps) in "notes".
-   Example: description="AC repair", notes="Evacuated/recharged system; replaced condenser; replaced O-rings; leak test; added dye."
- - Cost math (do this when the invoice is itemized and shows subtotal/tax/total):
-   - Treat EVERY charge as a line item amount that must be counted: parts, labor, fees, shop supplies, discounts/credits (negative), etc.
-   - Assign each line item to exactly one record (based on your logical grouping), then compute each record's pre-tax subtotal by summing its line items (parts + labor + fees).
-   - Make sure the SUM of all record pre-tax subtotals matches the invoice SUBTOTAL (pre-tax). If the invoice subtotal doesn't match the sum of itemized lines, mention it in "explanation".
-   - If the invoice shows tax amount and/or tax rate, allocate tax across records proportionally by each record's pre-tax subtotal, round to cents, and adjust the final record by any rounding remainder so totals match.
-   - Set each record's "totalCost" to (record pre-tax subtotal + allocated tax, if any). Ensure the SUM of all record totalCost values matches the invoice TOTAL as closely as possible.
-   - If you cannot confidently allocate costs per record, keep the records but set some totalCost to null and explain the uncertainty in "explanation".
- - If you cannot determine a value, set it to null and briefly explain why in explanation.
-`.trim()
-
-  const debugPrompt = prompt.replace(documentTextForPrompt, documentTextForDebug)
+  const { prompt, debugPrompt } = buildServicePrompt({
+    vehiclesText,
+    extraFieldsText,
+    documentText: params.documentText,
+  })
 
   const imageBlobs = (params.images ?? []).slice(0, 3)
   const imageB64s = await Promise.all(imageBlobs.map((b) => blobToBase64(b)))
