@@ -867,9 +867,6 @@ export default function SettingsPage() {
               <button className={`btn${connectedAs ? ' success' : ''}`} onClick={onTestConnection} disabled={!cfg || busyTest}>
                 {busyTest ? 'Testing…' : 'Test connection'}
               </button>
-              <button className="btn primary" onClick={onSave} disabled={!cfg || busyTest}>
-                Save
-              </button>
             </div>
 
             {connectedAs ? (
@@ -1159,6 +1156,12 @@ export default function SettingsPage() {
           {!hasAnyLlmKey ? <div className="muted">No LLM keys set. You can still enter values manually.</div> : null}
         </div>
       ) : null}
+
+      <div className="actions">
+        <button className="btn primary" onClick={onSave} disabled={!cfg || busyTest}>
+          Save
+        </button>
+      </div>
 
       <button className="btn" type="button" onClick={() => navigate('/how-it-works?next=%2Fsettings')}>
         How it works
