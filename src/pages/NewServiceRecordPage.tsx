@@ -515,20 +515,23 @@ export default function NewServiceRecordPage() {
     )
   }
 
-  async function onSubmitRecord(id: string) {
+  async function onSubmitAll() {
     if (!cfg) return
     if (!draft.document) {
       setError('Please select a document.')
       return
     }
-    const rec = (draft.records ?? []).find((r) => r.id === id)
-    if (!rec) return
-    if (!recordCanSubmit(rec)) {
-      const missingVehicle = typeof rec.form.vehicleId !== 'number'
-      if (missingVehicle) setCard3Open(true)
+
+    const pending = (draft.records ?? []).filter((r) => r.status !== 'submitted')
+    if (pending.length === 0) return
+
+    const invalid = pending.some((r) => !recordCanSubmit(r))
+    if (invalid) {
+      if (pending.some((r) => typeof r.form.vehicleId !== 'number')) setCard3Open(true)
+      setError('Some records have missing or invalid fields.')
       setDraft((d) => ({
         ...d,
-        records: (d.records ?? []).map((r) => (r.id === id ? { ...r, validationAttempted: true } : r)),
+        records: (d.records ?? []).map((r) => (r.status === 'submitted' ? r : { ...r, validationAttempted: true })),
       }))
       return
     }
@@ -540,50 +543,48 @@ export default function NewServiceRecordPage() {
       const uploaded = draft.uploadedFiles?.length ? draft.uploadedFiles : await uploadDocuments(cfg, [file])
       if (!draft.uploadedFiles?.length) setDraft((d) => ({ ...d, uploadedFiles: uploaded }))
 
-      setDraft((d) => ({
-        ...d,
-        records: (d.records ?? []).map((r) =>
-          r.id === id ? { ...r, status: 'submitting' as const, submitError: undefined } : r,
-        ),
-      }))
+      for (const rec of pending) {
+        setDraft((d) => ({
+          ...d,
+          records: (d.records ?? []).map((r) =>
+            r.id === rec.id ? { ...r, status: 'submitting' as const, submitError: undefined } : r,
+          ),
+        }))
 
-      const res = await addServiceLikeRecord(cfg, {
-        recordType: rec.form.recordType!,
-        vehicleId: rec.form.vehicleId!,
-        dateMMDDYYYY: toMMDDYYYY(rec.form.date ?? draft.date),
-        odometer: rec.form.odometer!,
-        description: rec.form.description!.trim(),
-        cost: rec.form.cost!,
-        notes: rec.form.notes?.trim() ? rec.form.notes.trim() : undefined,
-        tags: rec.form.tags?.trim() ? rec.form.tags.trim() : undefined,
-        extraFields: (rec.form.extraFields ?? []).filter((x) => x.name.trim() && x.value.trim()),
-        files: uploaded,
-      })
+        const res = await addServiceLikeRecord(cfg, {
+          recordType: rec.form.recordType!,
+          vehicleId: rec.form.vehicleId!,
+          dateMMDDYYYY: toMMDDYYYY(rec.form.date ?? draft.date),
+          odometer: rec.form.odometer!,
+          description: rec.form.description!.trim(),
+          cost: rec.form.cost!,
+          notes: rec.form.notes?.trim() ? rec.form.notes.trim() : undefined,
+          tags: rec.form.tags?.trim() ? rec.form.tags.trim() : undefined,
+          extraFields: (rec.form.extraFields ?? []).filter((x) => x.name.trim() && x.value.trim()),
+          files: uploaded,
+        })
+        console.log('Submitted', res)
 
-      console.log('Submitted', res)
-      let allSubmitted = false
-      setDraft((d) => {
-        const nextRecords = (d.records ?? []).map((r) =>
-          r.id === id ? { ...r, status: 'submitted' as const, submitError: undefined } : r,
-        )
-        allSubmitted = nextRecords.length > 0 && nextRecords.every((r) => r.status === 'submitted')
-        return { ...d, records: nextRecords }
-      })
-
-      if (allSubmitted) {
-        await clearServiceDraft()
-        vehicleTouched.current = false
-        setDraft({ date: todayISODate() })
-        lastExtractSigRef.current = ''
-        setSuccessOpen(true)
+        setDraft((d) => ({
+          ...d,
+          records: (d.records ?? []).map((r) =>
+            r.id === rec.id ? { ...r, status: 'submitted' as const, submitError: undefined } : r,
+          ),
+        }))
       }
-      console.log('Submitted', res)
+
+      // If we got here, every pending record submitted successfully.
+      await resetAll()
+      setSuccessOpen(true)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       setError(msg)
+      // Mark any currently-submitting record as failed.
       setDraft((d) => ({
         ...d,
-        records: (d.records ?? []).map((r) => (r.id === id ? { ...r, status: 'failed' as const, submitError: msg } : r)),
+        records: (d.records ?? []).map((r) =>
+          r.status === 'submitting' ? { ...r, status: 'failed' as const, submitError: msg } : r,
+        ),
       }))
     } finally {
       setSubmitBusy(false)
@@ -793,17 +794,35 @@ export default function NewServiceRecordPage() {
         draftDate={draft.date}
         records={draft.records ?? []}
         submitBusy={submitBusy}
-        extractBusy={extractBusy}
-        docBusy={docBusy}
-        onStartOver={async () => {
-          const anySubmitted = (draft.records ?? []).some((r) => r.status === 'submitted')
-          const hasAnything =
-            Boolean(draft.document || draft.documentText || draft.documentImages?.length || draft.records?.length || draft.extracted)
-          if (!anySubmitted && hasAnything) {
-            setStartOverConfirmOpen(true)
-            return
-          }
-          await resetAll()
+        onDeleteRecord={(recordId) => {
+          setDraft((d) => {
+            const records = (d.records ?? []).slice()
+            const idx = records.findIndex((r) => r.id === recordId)
+            if (idx === -1) return d
+
+            const nextRecordsRaw = records.filter((r) => r.id !== recordId)
+            const nextRecords = nextRecordsRaw.map((r, i) => ({ ...r, id: `rec-${i + 1}` }))
+
+            const extracted = d.extracted
+              ? {
+                  ...d.extracted,
+                  records: d.extracted.records.filter((_, i) => i !== idx),
+                  warnings: (d.extracted.warnings ?? [])
+                    .map((w) => {
+                      const m = w.path.match(/^\/records\/(\d+)\/(.+)$/)
+                      if (!m) return w
+                      const n = Number(m[1])
+                      if (!Number.isFinite(n)) return w
+                      if (n === idx) return null
+                      if (n > idx) return { ...w, path: `/records/${n - 1}/${m[2]}` }
+                      return w
+                    })
+                    .filter((w): w is NonNullable<typeof w> => Boolean(w)),
+                }
+              : d.extracted
+
+            return { ...d, extracted, records: nextRecords }
+          })
         }}
         numberOrEmpty={numberOrEmpty}
         requiredExtraFieldsFor={requiredExtraFieldsFor}
@@ -813,9 +832,36 @@ export default function NewServiceRecordPage() {
         updateRecord={updateRecord}
         updateRecordAndClearWarnings={updateRecordAndClearWarnings}
         hasWarningForRecordField={hasWarningForRecordField}
-        onSubmitRecord={onSubmitRecord}
         doneIcon={<DoneIcon />}
       />
+
+      <div className="actions">
+        <button
+          className="btn primary"
+          disabled={!hasRecords || submitBusy || extractBusy || docBusy}
+          onClick={onSubmitAll}
+          type="button"
+        >
+          {submitBusy ? 'Submitting…' : 'Submit to LubeLogger'}
+        </button>
+        <button
+          className="btn"
+          disabled={submitBusy || extractBusy || docBusy}
+          onClick={() => {
+            const anySubmitted = (draft.records ?? []).some((r) => r.status === 'submitted')
+            const hasAnything =
+              Boolean(draft.document || draft.documentText || draft.documentImages?.length || draft.records?.length || draft.extracted)
+            if (!anySubmitted && hasAnything) {
+              setStartOverConfirmOpen(true)
+              return
+            }
+            void resetAll()
+          }}
+          type="button"
+        >
+          Start over
+        </button>
+      </div>
 
       {docBusy || extractBusy ? <div className="muted">{docBusy ? 'Processing document…' : 'Extracting from document…'}</div> : null}
     </div>
