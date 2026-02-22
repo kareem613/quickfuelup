@@ -535,9 +535,14 @@ textarea {
   background: rgba(255, 255, 255, 0.9);
 }
 
-:root[data-theme='light'] .btn {
+:root[data-theme='light'] .btn:not(.primary):not(.success) {
   border-color: rgba(15, 23, 42, 0.18);
   background: rgba(15, 23, 42, 0.06);
+}
+
+:root[data-theme='light'] .btn.primary,
+:root[data-theme='light'] .btn.success {
+  color: #ffffff;
 }
 
 :root[data-theme='light'] .badge {
