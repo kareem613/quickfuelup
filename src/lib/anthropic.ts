@@ -159,10 +159,7 @@ Document text (may be empty for scanned PDFs):
 ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(none)'}
 
    Rules:
-   - Return valid JSON (no markdown, no backticks).
-   - While working, you may emit brief progress updates as standalone lines that start with "THINK:".
-     - Keep THINK lines short (1 sentence).
-     - Do NOT include any other non-JSON text.
+   - Return only valid JSON (no markdown, no backticks).
    - Use '.' as decimal separator.
    - Still make your best educated guess when the document strongly suggests a value (e.g. vehicleId from invoice header). Only use null when you truly cannot determine a value.
    - If any value is missing (null), guessed, uncertain, or conflicting, include a warning in "warnings" for that field.
@@ -198,14 +195,6 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
     })
   }
 
-  function extractThinking(text: string) {
-    const matches = Array.from(text.matchAll(/(?:^|\n)THINK:\s*([^\n\r]*)/g))
-      .map((m) => (m[1] ?? '').trim())
-      .filter(Boolean)
-    if (!matches.length) return null
-    return matches.slice(-6).join('\n')
-  }
-
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -217,7 +206,13 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
     body: JSON.stringify({
       model: params.model?.trim() || 'claude-haiku-4-5',
       max_tokens: 500,
-      ...(params.onThinking ? { stream: true } : null),
+      ...(params.onThinking
+        ? {
+            stream: true,
+            // Extended thinking: stream only the thinking block to the UI.
+            thinking: { type: 'enabled', budget_tokens: 1024 },
+          }
+        : null),
       messages: [{ role: 'user', content }],
     }),
   })
@@ -233,8 +228,10 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
     let buf = ''
-    let accText = ''
-    let lastThinking = ''
+    const blockTypeByIndex = new Map<number, string>()
+    let thinkingAcc = ''
+    let textAcc = ''
+    let lastThinkingSent = ''
     while (true) {
       const { value, done } = await reader.read()
       if (done) break
@@ -244,39 +241,62 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
         if (sep === -1) break
         const rawEvent = buf.slice(0, sep)
         buf = buf.slice(sep + 2)
-        const dataLine = rawEvent
+        const dataLines = rawEvent
           .split('\n')
           .map((l) => l.trim())
-          .find((l) => l.startsWith('data:'))
-        if (!dataLine) continue
-        const dataStr = dataLine.slice('data:'.length).trim()
-        if (!dataStr || dataStr === '[DONE]') continue
-        let evt: unknown
-        try {
-          evt = JSON.parse(dataStr)
-        } catch {
-          continue
-        }
-        if (typeof evt !== 'object' || evt === null) continue
-        const obj = evt as Record<string, unknown>
-        if (obj.type === 'content_block_delta') {
-          const delta = obj.delta
-          const deltaText =
-            typeof delta === 'object' && delta !== null && typeof (delta as Record<string, unknown>).text === 'string'
-              ? String((delta as Record<string, unknown>).text)
-              : ''
-          if (deltaText) {
-            accText += deltaText
-            const thinking = extractThinking(accText)
-            if (thinking && thinking !== lastThinking) {
-              lastThinking = thinking
-              params.onThinking(thinking)
+          .filter((l) => l.startsWith('data:'))
+          .map((l) => l.slice('data:'.length).trim())
+          .filter(Boolean)
+        if (!dataLines.length) continue
+
+        for (const dataStr of dataLines) {
+          if (dataStr === '[DONE]') continue
+          let evt: unknown
+          try {
+            evt = JSON.parse(dataStr)
+          } catch {
+            continue
+          }
+          if (typeof evt !== 'object' || evt === null) continue
+          const obj = evt as Record<string, unknown>
+          const evtType = typeof obj.type === 'string' ? obj.type : null
+
+          if (evtType === 'content_block_start') {
+            const index = typeof obj.index === 'number' ? obj.index : null
+            const block = typeof obj.content_block === 'object' && obj.content_block !== null ? obj.content_block : null
+            const blockType =
+              block && typeof (block as Record<string, unknown>).type === 'string'
+                ? String((block as Record<string, unknown>).type)
+                : null
+            if (typeof index === 'number' && blockType) blockTypeByIndex.set(index, blockType)
+          }
+
+          if (evtType === 'content_block_delta') {
+            const index = typeof obj.index === 'number' ? obj.index : null
+            const delta = typeof obj.delta === 'object' && obj.delta !== null ? (obj.delta as Record<string, unknown>) : null
+            if (typeof index !== 'number' || !delta) continue
+
+            const deltaType = typeof delta.type === 'string' ? delta.type : null
+            const blockType = blockTypeByIndex.get(index) ?? null
+
+            const thinkingDelta = typeof delta.thinking === 'string' ? delta.thinking : ''
+            const textDelta = typeof delta.text === 'string' ? delta.text : ''
+
+            if ((deltaType === 'thinking_delta' || blockType === 'thinking') && thinkingDelta) {
+              thinkingAcc += thinkingDelta
+              const nextThinking = thinkingAcc.trim()
+              if (nextThinking && nextThinking !== lastThinkingSent) {
+                lastThinkingSent = nextThinking
+                params.onThinking(nextThinking)
+              }
+            } else if ((deltaType === 'text_delta' || blockType === 'text') && textDelta) {
+              textAcc += textDelta
             }
           }
         }
       }
     }
-    joined = accText.trim()
+    joined = textAcc.trim()
   } else {
     const text = (await res.text()).trim()
     const data = JSON.parse(text) as unknown
