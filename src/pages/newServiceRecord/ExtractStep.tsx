@@ -1,8 +1,6 @@
 import type { ReactNode } from 'react'
 import { CollapsibleCard } from '../../components/ui/CollapsibleCard'
 
-type UiWarning = { title: string; detail: string }
-
 export function ExtractStep(props: {
   step1Done: boolean
   stepDone: boolean
