@@ -802,12 +802,13 @@ export default function SettingsPage() {
             </label>
           </div>
 
-          {isPwaInstallEnabled() && !isRunningStandalone() && installPromptReady ? (
+          {!isRunningStandalone() ? (
             <div className="card stack">
               <strong>App</strong>
               <button
                 className="btn"
                 type="button"
+                disabled={!installPromptReady}
                 onClick={async () => {
                   const p = getDeferredPrompt()
                   if (!p) return
@@ -821,7 +822,6 @@ export default function SettingsPage() {
               >
                 Install app
               </button>
-              <div className="muted">Install appears after a successful connection test.</div>
             </div>
           ) : null}
         </div>
