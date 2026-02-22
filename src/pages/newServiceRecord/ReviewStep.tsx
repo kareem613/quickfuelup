@@ -11,6 +11,7 @@ export function ReviewStep(props: {
   submitBusy: boolean
   extractBusy: boolean
   docBusy: boolean
+  onStartOver: () => void
   numberOrEmpty: (n: number | undefined) => string
   requiredExtraFieldsFor: (t: ServiceLikeRecordType | undefined) => string[]
   recordCanSubmit: (r: ServiceDraftRecord) => boolean
@@ -219,6 +220,14 @@ export function ReviewStep(props: {
               >
                 {r.status === 'submitting' ? 'Submitting…' : isSubmitted ? 'Submitted' : 'Submit to LubeLogger'}
               </button>
+              <button
+                className="btn"
+                disabled={props.submitBusy || props.extractBusy || props.docBusy}
+                onClick={props.onStartOver}
+                type="button"
+              >
+                Start over
+              </button>
             </div>
           </div>
         )
@@ -226,4 +235,3 @@ export function ReviewStep(props: {
     </div>
   )
 }
-

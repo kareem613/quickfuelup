@@ -755,6 +755,21 @@ export default function NewServiceRecordPage() {
         submitBusy={submitBusy}
         extractBusy={extractBusy}
         docBusy={docBusy}
+        onStartOver={async () => {
+          const anySubmitted = (draft.records ?? []).some((r) => r.status === 'submitted')
+          const hasAnything =
+            Boolean(draft.document || draft.documentText || draft.documentImages?.length || draft.records?.length || draft.extracted)
+          if (!anySubmitted && hasAnything) {
+            const ok = window.confirm("You haven't submitted yet. This will reset all fields. Continue?")
+            if (!ok) return
+          }
+          await clearServiceDraft()
+          vehicleTouched.current = false
+          lastExtractSigRef.current = ''
+          setExtractFailed(false)
+          setExtractMessage(null)
+          setDraft({ date: todayISODate() })
+        }}
         numberOrEmpty={numberOrEmpty}
         requiredExtraFieldsFor={requiredExtraFieldsFor}
         recordCanSubmit={recordCanSubmit}
@@ -766,24 +781,6 @@ export default function NewServiceRecordPage() {
         onSubmitRecord={onSubmitRecord}
         doneIcon={<DoneIcon />}
       />
-
-      <div className="actions">
-        <button
-          className="btn"
-          disabled={submitBusy || extractBusy || docBusy}
-          onClick={async () => {
-            await clearServiceDraft()
-            vehicleTouched.current = false
-            lastExtractSigRef.current = ''
-            setExtractFailed(false)
-            setExtractMessage(null)
-            setDraft({ date: todayISODate() })
-          }}
-          type="button"
-        >
-          Start over
-        </button>
-      </div>
 
       {docBusy || extractBusy ? <div className="muted">{docBusy ? 'Processing document…' : 'Extracting from document…'}</div> : null}
     </div>

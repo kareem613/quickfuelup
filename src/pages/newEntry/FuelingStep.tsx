@@ -26,7 +26,7 @@ export function FuelingStep(props: {
         <strong>4) Fueling</strong>
         <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
           <button
-            className="btn small"
+            className="icon-btn"
             disabled={!props.canExtract || props.extractBusy || props.submitBusy}
             onClick={props.onRetry}
             type="button"
@@ -82,4 +82,3 @@ export function FuelingStep(props: {
     </div>
   )
 }
-
