@@ -154,10 +154,7 @@ Document text (may be empty for scanned PDFs):
 ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(none)'}
 
   Rules:
-  - Return valid JSON (no markdown, no backticks).
-  - While working, you may emit brief progress updates as standalone lines that start with "THINK:".
-    - Keep THINK lines short (1 sentence).
-    - Do NOT include any other non-JSON text.
+  - Return only valid JSON (no markdown, no backticks).
   - Use '.' as decimal separator.
   - Still make your best educated guess when the document strongly suggests a value (e.g. vehicleId from invoice header). Only use null when you truly cannot determine a value.
   - If any value is missing (null), guessed, uncertain, or conflicting, include a warning in "warnings" for that field.
@@ -181,21 +178,15 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
   const imageBlobs = (params.images ?? []).slice(0, 3)
   const imageB64s = await Promise.all(imageBlobs.map((b) => blobToBase64(b)))
 
-  function extractThinking(text: string) {
-    const matches = Array.from(text.matchAll(/(?:^|\n)THINK:\s*([^\n\r]*)/g))
-      .map((m) => (m[1] ?? '').trim())
-      .filter(Boolean)
-    if (!matches.length) return null
-    return matches.slice(-6).join('\n')
-  }
-
   let lastErr: unknown
   for (const name of modelNames) {
     try {
       const model = genAI.getGenerativeModel({
         model: name,
-        // When streaming THINK updates we must allow non-JSON text in the response.
-        generationConfig: params.onThinking ? {} : { responseMimeType: 'application/json' },
+        generationConfig: (params.onThinking
+          ? // Thought summaries (Gemini thinking docs): parts with { thought: true }.
+            ({ thinkingConfig: { includeThoughts: true } } as unknown)
+          : { responseMimeType: 'application/json' }) as never,
       })
 
       const parts: unknown[] = [{ text: prompt }]
@@ -208,19 +199,29 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
       let text = ''
       if (params.onThinking) {
         const streamed = await model.generateContentStream(parts as never)
-        let acc = ''
-        let lastThinking = ''
+        let thoughts = ''
+        let answer = ''
+        let lastThoughtsSent = ''
         for await (const chunk of streamed.stream) {
-          const delta = chunk.text()
-          if (!delta) continue
-          acc += delta
-          const thinking = extractThinking(acc)
-          if (thinking && thinking !== lastThinking) {
-            lastThinking = thinking
-            params.onThinking(thinking)
+          const c0 = (chunk as unknown as { candidates?: Array<{ content?: { parts?: unknown[] } }> }).candidates?.[0]
+          const chunkParts = c0?.content?.parts ?? []
+          for (const p of chunkParts) {
+            if (typeof p !== 'object' || p === null) continue
+            const obj = p as Record<string, unknown>
+            if (typeof obj.text !== 'string' || !obj.text) continue
+            if (obj.thought === true) {
+              thoughts += obj.text
+              const trimmed = thoughts.trim()
+              if (trimmed && trimmed !== lastThoughtsSent) {
+                lastThoughtsSent = trimmed
+                params.onThinking(trimmed)
+              }
+            } else {
+              answer += obj.text
+            }
           }
         }
-        text = acc.trim()
+        text = answer.trim()
       } else {
         const result = await model.generateContent(parts as never)
         text = result.response.text().trim()
