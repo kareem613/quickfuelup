@@ -177,7 +177,7 @@ export default function SettingsPage() {
 
       if (loadConfig()) {
         setPendingImport(normalized)
-        setImportNotice('Decrypted settings ready to import.')
+        setImportNotice(null)
         return
       }
 
@@ -546,35 +546,6 @@ export default function SettingsPage() {
                 <div className="muted">Import requires a modern browser with WebCrypto support.</div>
               ) : (
                 <>
-                  <div className="muted">This link contains encrypted AppConfig settings only (no drafts or other flags).</div>
-                  <div className="field">
-                    <label>Passcode</label>
-                    <input
-                      type="password"
-                      value={importPasscode}
-                      onChange={(e) => setImportPasscode(e.target.value)}
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                    />
-                  </div>
-                  <div className="actions">
-                    <button className="btn primary" type="button" onClick={onDecryptImport} disabled={!importPasscode.trim()}>
-                      Decrypt
-                    </button>
-                    <button
-                      className="btn"
-                      type="button"
-                      onClick={() => {
-                        setPendingImport(null)
-                        setImportModalOpen(false)
-                        clearImportTokenFromUrl()
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-
                   {pendingImport ? (
                     <div className="card stack" style={{ padding: 10 }}>
                       <div className="muted">
@@ -607,7 +578,45 @@ export default function SettingsPage() {
                         </button>
                       </div>
                     </div>
-                  ) : null}
+                  ) : (
+                    <>
+                      <div className="muted">
+                        This link contains encrypted AppConfig settings only (no drafts or other flags).
+                      </div>
+                      <div className="field">
+                        <label>Passcode</label>
+                        <input
+                          type="password"
+                          value={importPasscode}
+                          onChange={(e) => setImportPasscode(e.target.value)}
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          spellCheck={false}
+                        />
+                      </div>
+                      <div className="actions">
+                        <button
+                          className="btn primary"
+                          type="button"
+                          onClick={onDecryptImport}
+                          disabled={!importPasscode.trim()}
+                        >
+                          Decrypt
+                        </button>
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={() => {
+                            setPendingImport(null)
+                            setImportModalOpen(false)
+                            clearImportTokenFromUrl()
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
               {importError ? <div className="error">{importError}</div> : null}
