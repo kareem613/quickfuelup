@@ -62,7 +62,7 @@ Return **only valid JSON** (no markdown, no backticks, no extra text) matching t
   ],
   "explanation": "Optional: overall caveats",
   "warnings": [
-    {"path": "/records/0/odometer", "reason": "guessed", "message": "Optional"}
+    {"path": "/records/0/odometer", "reason": "uncertain", "message": "Optional"}
   ]
 }
 \`\`\`
@@ -83,9 +83,11 @@ ${documentTextForPrompt}
 - Use "." as the decimal separator.
 - Still make your best educated guess when the document strongly suggests a value (e.g. \`vehicleId\` from invoice header).
 - Only use \`null\` when you truly cannot determine a value.
-- If any value is missing (\`null\`), guessed, uncertain, or conflicting, include a warning:
+- If any value is missing (\`null\`) or based on a guess, include a warning:
   - \`path\` like \`/records/<index>/<fieldName>\` (e.g. \`/records/0/vehicleId\`, \`/records/1/totalCost\`)
-  - \`reason\`: "missing" | "guessed" | "uncertain" | "conflict"
+  - \`reason\`: ONLY one of:
+    - "missing" = there is not enough data to make a confident value (use \`null\` in the field)
+    - "uncertain" = you made a best-effort guess based on partial evidence (field may be non-null)
   - Keep \`message\` short and user-friendly.
 - Record type:
   - \`service\` = scheduled maintenance
@@ -115,4 +117,3 @@ ${documentTextForPrompt}
     documentTextLength: documentTextTrimmed.length,
   }
 }
-
