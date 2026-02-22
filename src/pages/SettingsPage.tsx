@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import TopNav from '../components/TopNav'
+import { CollapsibleCard } from '../components/ui/CollapsibleCard'
 import { loadConfig, normalizeConfigFromUnknown, saveConfig } from '../lib/config'
 import { decryptTokenToConfigJson, encryptConfigToToken, isShareCryptoSupported } from '../lib/shareConfig'
 import type { AppConfig, LlmProvider } from '../lib/types'
@@ -938,16 +939,18 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className={`card stack${geminiOpen ? '' : ' collapsed'}`}>
-            <div className="row" style={{ justifyContent: 'space-between', gap: 10 }}>
-              <button className="row card-header-btn" type="button" onClick={() => setGeminiOpen((v) => !v)} style={{ flex: 1 }}>
+          <CollapsibleCard
+            title={
+              <>
                 <strong>Gemini</strong>
-                <span className="muted" style={{ marginLeft: 'auto' }}>
-                  {geminiApiKey.trim() ? 'Configured' : 'Not set'}
-                </span>
-              </button>
-            </div>
-            {!geminiOpen ? null : (
+              </>
+            }
+            open={geminiOpen}
+            onToggle={() => setGeminiOpen((v) => !v)}
+            right={
+              <span className="muted">{geminiApiKey.trim() ? 'Configured' : 'Not set'}</span>
+            }
+          >
               <>
                 <div className="field">
                   <label>Gemini API Key</label>
@@ -1040,19 +1043,18 @@ export default function SettingsPage() {
                   ) : null}
                 </div>
               </>
-            )}
-          </div>
+          </CollapsibleCard>
 
-          <div className={`card stack${anthropicOpen ? '' : ' collapsed'}`}>
-            <div className="row" style={{ justifyContent: 'space-between', gap: 10 }}>
-              <button className="row card-header-btn" type="button" onClick={() => setAnthropicOpen((v) => !v)} style={{ flex: 1 }}>
+          <CollapsibleCard
+            title={
+              <>
                 <strong>Anthropic</strong>
-                <span className="muted" style={{ marginLeft: 'auto' }}>
-                  {anthropicApiKey.trim() ? 'Configured' : 'Not set'}
-                </span>
-              </button>
-            </div>
-            {!anthropicOpen ? null : (
+              </>
+            }
+            open={anthropicOpen}
+            onToggle={() => setAnthropicOpen((v) => !v)}
+            right={<span className="muted">{anthropicApiKey.trim() ? 'Configured' : 'Not set'}</span>}
+          >
               <>
                 <div className="field">
                   <label>Anthropic API Key</label>
@@ -1145,8 +1147,7 @@ export default function SettingsPage() {
                   ) : null}
                 </div>
               </>
-            )}
-          </div>
+          </CollapsibleCard>
 
           {!hasAnyLlmKey ? <div className="muted">No LLM keys set. You can still enter values manually.</div> : null}
         </div>

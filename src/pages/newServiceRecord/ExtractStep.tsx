@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { CollapsibleCard } from '../../components/ui/CollapsibleCard'
 
 export function ExtractStep(props: {
   step1Done: boolean
@@ -37,37 +38,39 @@ export function ExtractStep(props: {
             ? { kind: 'muted' as const, text: 'Ready to extract.' }
             : null
 
-  return (
-    <div
-      className={`card stack${props.extracting ? ' extracting' : ''}${props.stepDone && !props.open ? ' collapsed' : ''}`}
-      style={{ opacity: props.step1Done ? 1 : 0.6 }}
-    >
-      <div className="row" style={{ justifyContent: 'space-between', gap: 10 }}>
-        <button className="row card-header-btn" type="button" onClick={props.onToggle} style={{ flex: 1, width: 'auto' }}>
-          <strong>2) Extract</strong>
+  const title = <strong>2) Extract</strong>
+  const right = (
+    <>
+      {props.stepDone ? props.doneIcon : <span className="muted">Required</span>}
+      {showRetry ? (
+        <button
+          className="icon-btn"
+          disabled={!props.canExtractAny || props.extracting || props.submitBusy}
+          onClick={props.onRetry}
+          type="button"
+          aria-label="Retry extraction"
+          title="Retry"
+        >
+          {props.refreshIcon}
         </button>
-        <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
-          {props.stepDone ? props.doneIcon : <span className="muted">Required</span>}
-          {showRetry ? (
-            <button
-              className="icon-btn"
-              disabled={!props.canExtractAny || props.extracting || props.submitBusy}
-              onClick={props.onRetry}
-              type="button"
-              aria-label="Retry extraction"
-              title="Retry"
-            >
-              {props.refreshIcon}
-            </button>
-          ) : null}
-        </div>
-      </div>
+      ) : null}
+    </>
+  )
 
-      {props.stepDone && !props.open ? null : message ? (
+  return (
+    <CollapsibleCard
+      title={title}
+      open={props.open || !props.stepDone}
+      onToggle={props.onToggle}
+      right={right}
+      extracting={props.extracting}
+      disabled={!props.step1Done}
+    >
+      {message ? (
         <div className={message.kind === 'error' ? 'error' : 'muted'} style={{ whiteSpace: 'pre-wrap' }}>
           {message.text}
         </div>
       ) : null}
-    </div>
+    </CollapsibleCard>
   )
 }

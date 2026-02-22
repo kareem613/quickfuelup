@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { Vehicle } from '../../lib/types'
+import { CollapsibleCard } from '../../components/ui/CollapsibleCard'
 
 export function VehicleStep(props: {
   step1Done: boolean
@@ -17,17 +18,18 @@ export function VehicleStep(props: {
   splitVehicleName: (name: string) => { year?: string; model: string }
   doneIcon: ReactNode
 }) {
+  const title = <strong>3) Vehicle{props.selectedVehicleName ? `: ${props.selectedVehicleName}` : ''}</strong>
+  const right = props.stepDone ? props.doneIcon : <span className="muted">Required</span>
   return (
-    <div
-      className={`card stack${props.stepDone && !props.open ? ' collapsed' : ''}${props.anyInvalid ? ' invalid' : ''}`}
-      style={{ opacity: props.step1Done ? 1 : 0.6 }}
+    <CollapsibleCard
+      title={title}
+      open={props.open || !props.stepDone}
+      onToggle={props.onToggle}
+      right={right}
+      invalid={props.anyInvalid}
+      disabled={!props.step1Done}
     >
-      <button className="row card-header-btn" type="button" onClick={props.onToggle}>
-        <strong>3) Vehicle{props.selectedVehicleName ? `: ${props.selectedVehicleName}` : ''}</strong>
-        {props.stepDone ? props.doneIcon : <span className="muted">Required</span>}
-      </button>
-
-      {props.stepDone && !props.open ? null : !props.step1Done ? (
+      {!props.step1Done ? (
         <div className="muted">Upload an invoice first.</div>
       ) : props.busy ? (
         <div className="muted">Loading vehicles…</div>
@@ -57,7 +59,6 @@ export function VehicleStep(props: {
           })}
         </div>
       )}
-    </div>
+    </CollapsibleCard>
   )
 }
-

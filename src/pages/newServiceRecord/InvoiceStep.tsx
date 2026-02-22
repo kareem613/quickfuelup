@@ -1,4 +1,5 @@
 import type { ReactNode, RefObject } from 'react'
+import { CollapsibleCard } from '../../components/ui/CollapsibleCard'
 
 export function InvoiceStep(props: {
   stepDone: boolean
@@ -16,13 +17,10 @@ export function InvoiceStep(props: {
   fileIcon: ReactNode
 }) {
   const disabled = props.docBusy || props.submitBusy
+  const title = <strong>1) Invoice / receipt (PDF or image)</strong>
+  const right = props.stepDone ? props.doneIcon : <span className="muted">Required</span>
   return (
-    <div className={`card stack${props.stepDone && !props.open ? ' collapsed' : ''}`}>
-      <button className="row card-header-btn" type="button" onClick={props.onToggle}>
-        <strong>1) Invoice / receipt (PDF or image)</strong>
-        {props.stepDone ? props.doneIcon : <span className="muted">Required</span>}
-      </button>
-      {props.stepDone && !props.open ? null : (
+    <CollapsibleCard title={title} open={props.open || !props.stepDone} onToggle={props.onToggle} right={right}>
         <>
           <div className={`image-preview clickable split${disabled ? ' disabled' : ''}`}>
             {props.previewUrl ? <img src={props.previewUrl} alt="Document preview" /> : null}
@@ -67,8 +65,6 @@ export function InvoiceStep(props: {
           />
           <div className="muted">{props.selectedLabel}</div>
         </>
-      )}
-    </div>
+    </CollapsibleCard>
   )
 }
-
