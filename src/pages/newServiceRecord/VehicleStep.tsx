@@ -36,6 +36,8 @@ export function VehicleStep(props: {
         <div className="muted">Upload an invoice first.</div>
       ) : props.busy ? (
         <div className="muted">Loading vehicles…</div>
+      ) : props.vehicles.length === 0 ? (
+        <div className="muted">No vehicles found in LubeLogger.</div>
       ) : (
         <>
           {props.warningItems.length ? (

@@ -20,6 +20,8 @@ export function VehicleSelectStep(props: {
     <CollapsibleCard title={title} open={props.open || !props.stepDone} onToggle={props.onToggle} right={right}>
       {props.busy ? (
         <div className="muted">Loading vehicles…</div>
+      ) : props.vehicles.length === 0 ? (
+        <div className="muted">No vehicles found in LubeLogger.</div>
       ) : (
         <div className="vehicle-grid">
           {props.vehicles.map((v) => {
