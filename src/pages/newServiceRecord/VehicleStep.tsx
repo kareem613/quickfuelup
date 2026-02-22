@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react'
 import type { Vehicle } from '../../lib/types'
+import { CollapsibleCard } from '../../components/ui/CollapsibleCard'
+
+type UiWarning = { title: string; detail: string }
 
 export function VehicleStep(props: {
   step1Done: boolean
@@ -10,6 +13,7 @@ export function VehicleStep(props: {
   vehicles: Vehicle[]
   selectedVehicleId: number | undefined
   anyVehicleWarning: boolean
+  warningItems: UiWarning[]
   busy: boolean
   submitBusy: boolean
   onToggle: () => void
@@ -17,47 +21,70 @@ export function VehicleStep(props: {
   splitVehicleName: (name: string) => { year?: string; model: string }
   doneIcon: ReactNode
 }) {
+  const title = <strong>3) Vehicle{props.selectedVehicleName ? `: ${props.selectedVehicleName}` : ''}</strong>
+  const right = props.stepDone ? props.doneIcon : <span className="muted">Required</span>
   return (
-    <div
-      className={`card stack${props.stepDone && !props.open ? ' collapsed' : ''}${props.anyInvalid ? ' invalid' : ''}`}
-      style={{ opacity: props.step1Done ? 1 : 0.6 }}
+    <CollapsibleCard
+      title={title}
+      open={props.open || !props.stepDone}
+      onToggle={props.onToggle}
+      right={right}
+      invalid={props.anyInvalid}
+      disabled={!props.step1Done}
     >
-      <button className="row card-header-btn" type="button" onClick={props.onToggle}>
-        <strong>3) Vehicle{props.selectedVehicleName ? `: ${props.selectedVehicleName}` : ''}</strong>
-        {props.stepDone ? props.doneIcon : <span className="muted">Required</span>}
-      </button>
-
-      {props.stepDone && !props.open ? null : !props.step1Done ? (
+      {!props.step1Done ? (
         <div className="muted">Upload an invoice first.</div>
       ) : props.busy ? (
         <div className="muted">Loading vehicles…</div>
       ) : (
-        <div className="vehicle-grid">
-          {props.vehicles.map((v) => {
-            const selected = props.selectedVehicleId === v.id
-            return (
-              <button
-                key={v.id}
-                className={`vehicle-card${selected ? ' selected' : ''}${selected && props.anyVehicleWarning ? ' warn' : ''}`}
-                onClick={() => props.onSelectVehicle(v.id)}
-                disabled={props.submitBusy}
-                type="button"
-              >
-                {(() => {
-                  const parts = props.splitVehicleName(v.name)
-                  return (
-                    <div className="vehicle-name">
-                      {parts.year ? <div className="vehicle-year">{parts.year}</div> : null}
-                      <div className="vehicle-model">{parts.model}</div>
-                    </div>
-                  )
-                })()}
-              </button>
-            )
-          })}
-        </div>
+        <>
+          {props.warningItems.length ? (
+            <div
+              style={{
+                marginBottom: 12,
+                border: '1px solid rgba(245, 158, 11, 0.45)',
+                background: 'rgba(245, 158, 11, 0.10)',
+                borderRadius: 12,
+                padding: '10px 12px',
+              }}
+            >
+              <div style={{ fontWeight: 650, marginBottom: 6 }}>Warning</div>
+              <ul style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 6 }}>
+                {props.warningItems.map((w, i) => (
+                  <li key={`${w.title}:${i}`}>
+                    <strong>Vehicle</strong>: {w.detail}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <div className="vehicle-grid">
+            {props.vehicles.map((v) => {
+              const selected = props.selectedVehicleId === v.id
+              return (
+                <button
+                  key={v.id}
+                  className={`vehicle-card${selected ? ' selected' : ''}${selected && props.anyVehicleWarning ? ' warn' : ''}`}
+                  onClick={() => props.onSelectVehicle(v.id)}
+                  disabled={props.submitBusy}
+                  type="button"
+                >
+                  {(() => {
+                    const parts = props.splitVehicleName(v.name)
+                    return (
+                      <div className="vehicle-name">
+                        {parts.year ? <div className="vehicle-year">{parts.year}</div> : null}
+                        <div className="vehicle-model">{parts.model}</div>
+                      </div>
+                    )
+                  })()}
+                </button>
+              )
+            })}
+          </div>
+        </>
       )}
-    </div>
+    </CollapsibleCard>
   )
 }
-

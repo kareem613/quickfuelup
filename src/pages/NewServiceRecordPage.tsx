@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import TopNav from '../components/TopNav'
+import { LlmDebugCard } from '../components/LlmDebugCard'
 import { loadConfig } from '../lib/config'
 import { todayISODate, toMMDDYYYY } from '../lib/date'
 import { clearServiceDraft, loadServiceDraft, saveServiceDraft } from '../lib/serviceDraft'
 import { compressImage } from '../lib/image'
 import { extractServiceFromDocumentWithFallback } from '../lib/llm'
+import type { LlmDebugEvent } from '../lib/llmDebug'
 import { addServiceLikeRecord, getExtraFields, getVehicles, uploadDocuments } from '../lib/lubelogger'
 import { pdfToTextAndImages } from '../lib/pdf'
-import type { ServiceDraft, ServiceDraftRecord, ServiceLikeRecordType, Vehicle } from '../lib/types'
+import type { ServiceDraft, ServiceDraftRecord, ServiceExtractionWarning, ServiceLikeRecordType, Vehicle } from '../lib/types'
 import { InvoiceStep } from './newServiceRecord/InvoiceStep'
 import { ExtractStep } from './newServiceRecord/ExtractStep'
 import { VehicleStep } from './newServiceRecord/VehicleStep'
@@ -56,6 +58,8 @@ function normalizeToISODate(input: string | null | undefined): string | null {
   if (Number.isFinite(d.getTime())) return d.toISOString().slice(0, 10)
   return null
 }
+
+type UiWarning = { title: string; detail: string }
 
 function DoneIcon() {
   return (
@@ -139,6 +143,7 @@ export default function NewServiceRecordPage() {
   const [submitBusy, setSubmitBusy] = useState(false)
   const [extractFailed, setExtractFailed] = useState(false)
   const [extractMessage, setExtractMessage] = useState<string | null>(null)
+  const [llmDebug, setLlmDebug] = useState<{ prompt: string; responseRaw: string; responseJson: unknown } | null>(null)
   const [forceExtractTick, setForceExtractTick] = useState(0)
   const lastForceExtractTickRef = useRef(0)
   const lastExtractSigRef = useRef<string>('')
@@ -173,7 +178,9 @@ export default function NewServiceRecordPage() {
 
   const extraFieldNamesByRecordType = useMemo(() => {
     const out: Record<string, string[]> = {}
+    const allow = new Set(['ServiceRecord', 'RepairRecord', 'UpgradeRecord'])
     for (const r of extraFieldDefs) {
+      if (!allow.has(r.recordType)) continue
       out[r.recordType] = (r.extraFields ?? []).map((x) => x.name).filter(Boolean)
     }
     return out
@@ -287,6 +294,43 @@ export default function NewServiceRecordPage() {
   const extractedWarnings = draft.extracted?.warnings ?? []
   const keepExtractOpen = extractFailed || extractedWarnings.length > 0
 
+  function parsedRecordWarning(w: ServiceExtractionWarning): { recordIdx: number; field: string } | null {
+    const m = w.path.match(/^\/records\/(\d+)\/(.+)$/)
+    if (!m) return null
+    const recordIdx = Number(m[1])
+    if (!Number.isFinite(recordIdx)) return null
+    return { recordIdx, field: m[2] ?? '' }
+  }
+
+  function warningDetail(w: ServiceExtractionWarning) {
+    const msg = typeof w.message === 'string' ? w.message.trim() : ''
+    return msg ? `${w.reason} — ${msg}` : w.reason
+  }
+
+  function fieldLabel(field: string) {
+    return field === 'vehicleId'
+      ? 'Vehicle'
+      : field === 'recordType'
+        ? 'Record type'
+        : field === 'totalCost'
+          ? 'Total cost'
+          : field.charAt(0).toUpperCase() + field.slice(1)
+  }
+
+  const vehicleWarningItems: UiWarning[] = extractedWarnings
+    .filter((w) => /^\/records\/\d+\/vehicleId$/.test(w.path))
+    .map((w) => ({ title: 'Warning', detail: warningDetail(w) }))
+
+  function warningItemsForRecord(recordIdx: number): UiWarning[] {
+    return extractedWarnings
+      .map((w) => ({ w, parsed: parsedRecordWarning(w) }))
+      .filter((x) => x.parsed && x.parsed.recordIdx === recordIdx && x.parsed.field !== 'vehicleId')
+      .map(({ w, parsed }) => ({
+        title: fieldLabel(parsed!.field),
+        detail: warningDetail(w),
+      }))
+  }
+
   function hasWarningForRecordField(recordIdx: number, field: string) {
     return extractedWarnings.some((w) => w.path === `/records/${recordIdx}/${field}`)
   }
@@ -368,8 +412,31 @@ export default function NewServiceRecordPage() {
       setError(null)
       setExtractFailed(false)
       setExtractMessage(null)
+      const debugEnabled = Boolean(cfg?.llmDebugEnabled)
+      if (debugEnabled) setLlmDebug({ prompt: '', responseRaw: '', responseJson: null })
+      else setLlmDebug(null)
 
       try {
+        const onDebugEvent = debugEnabled
+          ? (evt: LlmDebugEvent) => {
+              setLlmDebug((prev) => {
+                const next = prev ?? { prompt: '', responseRaw: '', responseJson: null }
+                if (evt.type === 'request') {
+                  const payload = typeof evt.payload === 'object' && evt.payload !== null ? (evt.payload as Record<string, unknown>) : null
+                  const prompt = (payload && typeof payload.prompt === 'string' ? payload.prompt : null) ?? ''
+                  return {
+                    prompt,
+                    responseRaw: '',
+                    responseJson: null,
+                  }
+                }
+                if (evt.type === 'chunk') return { ...next, responseRaw: `${next.responseRaw}${evt.chunk}\n` }
+                if (evt.type === 'response') return { ...next, responseJson: evt.payload }
+                return { ...next, responseRaw: `${next.responseRaw}\nERROR: ${evt.error}` }
+              })
+            }
+          : undefined
+
         const extracted = await extractServiceFromDocumentWithFallback({
           providers: providersWithKeys,
           images: draft.documentImages?.slice(0, 3),
@@ -377,6 +444,7 @@ export default function NewServiceRecordPage() {
           vehicles,
           extraFieldNamesByRecordType,
           onThinking: (m) => setExtractMessage(m),
+          onDebugEvent,
         })
 
         setExtractMessage(extracted.explanation?.trim() ? extracted.explanation.trim() : 'Extraction complete.')
@@ -393,46 +461,18 @@ export default function NewServiceRecordPage() {
               : (!vehicleTouched.current && anySuggestedVehicle ? anySuggestedVehicle : currentVehicleId)) ?? null
 
           // If the LLM suggests the same vehicle the user already selected (explicitly), treat vehicleId warnings as resolved/noise.
-          const cleanedExtracted =
-            vehicleTouched.current &&
-            anySuggestedVehicle &&
-            typeof currentVehicleId === 'number' &&
-            currentVehicleId === anySuggestedVehicle
-              ? {
-                  ...extracted,
-                  warnings: (extracted.warnings ?? []).filter((w) => !/^\/records\/\d+\/vehicleId$/.test(w.path)),
-                }
-              : extracted
+           const cleanedExtracted =
+             vehicleTouched.current &&
+             anySuggestedVehicle &&
+             typeof currentVehicleId === 'number' &&
+             currentVehicleId === anySuggestedVehicle
+               ? {
+                   ...extracted,
+                   warnings: (extracted.warnings ?? []).filter((w) => !/^\/records\/\d+\/vehicleId$/.test(w.path)),
+                 }
+               : extracted
 
-          const shouldWarnVehicle = Boolean(
-            anySuggestedVehicle &&
-              (!vehicleTouched.current || (typeof currentVehicleId === 'number' && currentVehicleId !== anySuggestedVehicle)),
-          )
-
-          const baseWarnings = cleanedExtracted.warnings ?? []
-          const warnings =
-            shouldWarnVehicle && cleanedExtracted.records.length
-              ? (() => {
-                  const next = baseWarnings.slice()
-                  for (let i = 0; i < cleanedExtracted.records.length; i++) {
-                    const path = `/records/${i}/vehicleId`
-                    if (next.some((w) => w.path === path)) continue
-                    next.push({
-                      path,
-                      reason: typeof currentVehicleId === 'number' && currentVehicleId !== anySuggestedVehicle ? 'conflict' : 'guessed',
-                      message:
-                        typeof currentVehicleId === 'number' && currentVehicleId !== anySuggestedVehicle
-                          ? 'Vehicle differs from your selection; please confirm.'
-                          : 'Vehicle was selected automatically; please confirm.',
-                    })
-                  }
-                  return next
-                })()
-              : baseWarnings
-
-          const extractedWithWarnings = shouldWarnVehicle ? { ...cleanedExtracted, warnings } : cleanedExtracted
-
-          const records: ServiceDraftRecord[] = extractedWithWarnings.records.map((r, idx) => {
+          const records: ServiceDraftRecord[] = cleanedExtracted.records.map((r, idx) => {
             const vehicleId =
               typeof r.vehicleId === 'number' && vehicles.some((v) => v.id === r.vehicleId) ? r.vehicleId : baseVehicleId
             const iso = normalizeToISODate(r.date)
@@ -458,7 +498,7 @@ export default function NewServiceRecordPage() {
             ...d,
             // If the LLM suggests a different vehicle, prefer it over the current selection.
             vehicleId: baseVehicleId ?? d.vehicleId,
-            extracted: extractedWithWarnings,
+            extracted: cleanedExtracted,
             records,
           }
         })
@@ -528,7 +568,7 @@ export default function NewServiceRecordPage() {
     const invalid = pending.some((r) => !recordCanSubmit(r))
     if (invalid) {
       if (pending.some((r) => typeof r.form.vehicleId !== 'number')) setCard3Open(true)
-      setError('Some records have missing or invalid fields.')
+      setError(null)
       setDraft((d) => ({
         ...d,
         records: (d.records ?? []).map((r) => (r.status === 'submitted' ? r : { ...r, validationAttempted: true })),
@@ -611,6 +651,7 @@ export default function NewServiceRecordPage() {
     lastExtractSigRef.current = ''
     setExtractFailed(false)
     setExtractMessage(null)
+    setLlmDebug(null)
     setDraft({ date: todayISODate() })
   }
 
@@ -755,6 +796,10 @@ export default function NewServiceRecordPage() {
         refreshIcon={<RefreshIcon />}
       />
 
+      {cfg?.llmDebugEnabled && llmDebug ? (
+        <LlmDebugCard prompt={llmDebug.prompt} responseJson={llmDebug.responseJson} responseRaw={llmDebug.responseRaw} />
+      ) : null}
+
       <VehicleStep
         step1Done={step1Done}
         stepDone={step3Done}
@@ -764,6 +809,7 @@ export default function NewServiceRecordPage() {
         vehicles={vehicles}
         selectedVehicleId={draft.vehicleId}
         anyVehicleWarning={anyVehicleIdWarning}
+        warningItems={vehicleWarningItems}
         busy={busy}
         submitBusy={submitBusy}
         onToggle={() => {
@@ -832,6 +878,7 @@ export default function NewServiceRecordPage() {
         updateRecord={updateRecord}
         updateRecordAndClearWarnings={updateRecordAndClearWarnings}
         hasWarningForRecordField={hasWarningForRecordField}
+        warningItemsForRecord={warningItemsForRecord}
         doneIcon={<DoneIcon />}
       />
 
@@ -863,7 +910,6 @@ export default function NewServiceRecordPage() {
         </button>
       </div>
 
-      {docBusy || extractBusy ? <div className="muted">{docBusy ? 'Processing document…' : 'Extracting from document…'}</div> : null}
     </div>
   )
 }

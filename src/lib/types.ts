@@ -9,6 +9,8 @@ export type AppConfig = {
   // When false/undefined, sold vehicles are hidden from pickers.
   showSoldVehicles?: boolean
   uiTheme?: ThemePreference
+  // When enabled, show an in-app LLM debug panel during extraction.
+  llmDebugEnabled?: boolean
   useProxy: boolean
   llm: {
     providerOrder: LlmProvider[]
@@ -48,6 +50,7 @@ export type Vehicle = {
   id: number
   name: string
   imageLocation?: string
+  vin?: string
 }
 
 export type ServiceLikeRecordType = 'service' | 'repair' | 'upgrade'
@@ -82,7 +85,7 @@ export type ServiceExtractionResult = {
   rawJson?: unknown
 }
 
-export type ServiceExtractionWarningReason = 'missing' | 'guessed' | 'uncertain' | 'conflict'
+export type ServiceExtractionWarningReason = 'missing' | 'uncertain' | 'inferred'
 
 export type ServiceExtractionWarning = {
   path: string

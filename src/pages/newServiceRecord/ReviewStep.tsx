@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react'
 import type { ServiceDraftRecord, ServiceLikeRecordType } from '../../lib/types'
 import { ExtraFieldsBox } from './ExtraFieldsBox'
+import { Card } from '../../components/ui/Card'
+
+type UiWarning = { title: string; detail: string }
 
 function TrashIcon() {
   return (
@@ -38,10 +41,11 @@ export function ReviewStep(props: {
     fn: (r: ServiceDraftRecord) => ServiceDraftRecord
   }) => void
   hasWarningForRecordField: (recordIdx: number, field: string) => boolean
+  warningItemsForRecord: (recordIdx: number) => UiWarning[]
   doneIcon: ReactNode
 }) {
   return (
-    <div className={`card stack`} style={{ opacity: props.step1Done && props.step2Done ? 1 : 0.6 }}>
+    <Card style={{ opacity: props.step1Done && props.step2Done ? 1 : 0.6 }}>
       <div className="row">
         <strong>4) Review</strong>
       </div>
@@ -53,6 +57,7 @@ export function ReviewStep(props: {
         const datalistId = `extra-field-names-${r.id}`
         const isSubmitted = r.status === 'submitted'
         const attempted = Boolean(r.validationAttempted)
+        const warningItems = props.warningItemsForRecord(idx)
 
         const invalidRecordType = attempted && !r.form.recordType
         const invalidOdometer =
@@ -102,6 +107,26 @@ export function ReviewStep(props: {
             {r.submitError ? (
               <div className="error" style={{ whiteSpace: 'pre-wrap' }}>
                 {r.submitError}
+              </div>
+            ) : null}
+
+            {warningItems.length ? (
+              <div
+                style={{
+                  border: '1px solid rgba(245, 158, 11, 0.45)',
+                  background: 'rgba(245, 158, 11, 0.10)',
+                  borderRadius: 12,
+                  padding: '10px 12px',
+                }}
+              >
+                <div style={{ fontWeight: 650, marginBottom: 6 }}>Warnings</div>
+                <ul style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 6 }}>
+                  {warningItems.map((w, i) => (
+                    <li key={`${w.title}:${i}`}>
+                      <strong>{w.title}</strong>: {w.detail}
+                    </li>
+                  ))}
+                </ul>
               </div>
             ) : null}
 
@@ -242,9 +267,9 @@ export function ReviewStep(props: {
             />
 
             {attempted && !props.recordCanSubmit(r) ? <div className="error">Some fields are missing or invalid.</div> : null}
-          </div>
-        )
-      })}
-    </div>
+            </div>
+          )
+        })}
+    </Card>
   )
 }

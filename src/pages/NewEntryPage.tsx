@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import TopNav from '../components/TopNav'
+import { LlmDebugCard } from '../components/LlmDebugCard'
 import { loadConfig } from '../lib/config'
 import { toMMDDYYYY, todayISODate } from '../lib/date'
 import { clearDraft, loadDraft, saveDraft } from '../lib/draft'
 import { compressImage } from '../lib/image'
 import { extractFromImagesWithFallback } from '../lib/llm'
+import type { LlmDebugEvent } from '../lib/llmDebug'
 import { addGasRecord, getVehicles } from '../lib/lubelogger'
 import type { Draft, Vehicle } from '../lib/types'
 import { VehicleSelectStep } from './newEntry/VehicleSelectStep'
@@ -143,6 +145,7 @@ export default function NewEntryPage() {
   const [submitValidationMessage, setSubmitValidationMessage] = useState<string | null>(null)
   const [extractFailed, setExtractFailed] = useState(false)
   const [extractLlmMessage, setExtractLlmMessage] = useState<string | null>(null)
+  const [llmDebug, setLlmDebug] = useState<{ prompt: string; responseRaw: string; responseJson: unknown } | null>(null)
   const [forceExtractTick, setForceExtractTick] = useState(0)
   const lastForceExtractTickRef = useRef(0)
   const lastExtractSigRef = useRef<string>('')
@@ -314,11 +317,35 @@ export default function NewEntryPage() {
       setError(null)
       setExtractFailed(false)
       setExtractLlmMessage(null)
+      const debugEnabled = Boolean(cfg?.llmDebugEnabled)
+      if (debugEnabled) setLlmDebug({ prompt: '', responseRaw: '', responseJson: null })
+      else setLlmDebug(null)
       try {
+        const onDebugEvent = debugEnabled
+          ? (evt: LlmDebugEvent) => {
+              setLlmDebug((prev) => {
+                const next = prev ?? { prompt: '', responseRaw: '', responseJson: null }
+                if (evt.type === 'request') {
+                  const payload = typeof evt.payload === 'object' && evt.payload !== null ? (evt.payload as Record<string, unknown>) : null
+                  const prompt = (payload && typeof payload.prompt === 'string' ? payload.prompt : null) ?? ''
+                  return {
+                    prompt,
+                    responseRaw: '',
+                    responseJson: null,
+                  }
+                }
+                if (evt.type === 'chunk') return { ...next, responseRaw: `${next.responseRaw}${evt.chunk}\n` }
+                if (evt.type === 'response') return { ...next, responseJson: evt.payload }
+                return { ...next, responseRaw: `${next.responseRaw}\nERROR: ${evt.error}` }
+              })
+            }
+          : undefined
+
         const extracted = await extractFromImagesWithFallback({
           providers: providersWithKeys,
           pumpImage: draft.pumpImage!,
           odometerImage: draft.odometerImage!,
+          onDebugEvent,
         })
 
         if (
@@ -566,6 +593,10 @@ export default function NewEntryPage() {
         fileIcon={<FileIcon />}
       />
 
+      {cfg?.llmDebugEnabled && llmDebug ? (
+        <LlmDebugCard prompt={llmDebug.prompt} responseJson={llmDebug.responseJson} responseRaw={llmDebug.responseRaw} />
+      ) : null}
+
       <FuelingStep
         canEditDetails={canEditDetails}
         extractBusy={extractBusy}
@@ -636,6 +667,7 @@ export default function NewEntryPage() {
         onSubmit={onSubmit}
         onStartOver={async () => {
           await clearDraft()
+          setLlmDebug(null)
           lastExtractSigRef.current = ''
           setExtractFailed(false)
           setExtractLlmMessage(null)
@@ -651,9 +683,6 @@ export default function NewEntryPage() {
         }
       />
 
-      {imageBusy || extractBusy ? (
-        <div className="muted">{imageBusy ? 'Processing images…' : 'Extracting from photos…'}</div>
-      ) : null}
     </div>
   )
 }

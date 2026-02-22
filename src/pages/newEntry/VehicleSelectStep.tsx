@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { Vehicle } from '../../lib/types'
+import { CollapsibleCard } from '../../components/ui/CollapsibleCard'
 
 export function VehicleSelectStep(props: {
   stepDone: boolean
@@ -13,13 +14,11 @@ export function VehicleSelectStep(props: {
   splitVehicleName: (name: string) => { year?: string; model: string }
   doneIcon: ReactNode
 }) {
+  const title = <strong>1) Select vehicle</strong>
+  const right = props.stepDone ? props.doneIcon : <span className="muted">Required</span>
   return (
-    <div className={`card stack${props.stepDone && !props.open ? ' collapsed' : ''}`}>
-      <button className="row card-header-btn" type="button" onClick={props.onToggle}>
-        <strong>1) Select vehicle</strong>
-        {props.stepDone ? props.doneIcon : <span className="muted">Required</span>}
-      </button>
-      {props.stepDone && !props.open ? null : props.busy ? (
+    <CollapsibleCard title={title} open={props.open || !props.stepDone} onToggle={props.onToggle} right={right}>
+      {props.busy ? (
         <div className="muted">Loading vehicles…</div>
       ) : (
         <div className="vehicle-grid">
@@ -47,7 +46,6 @@ export function VehicleSelectStep(props: {
           })}
         </div>
       )}
-    </div>
+    </CollapsibleCard>
   )
 }
-

@@ -16,6 +16,7 @@ export function normalizeConfigFromUnknown(value: unknown): AppConfig | null {
 
   const uiThemeRaw = (parsed as Record<string, unknown>).uiTheme
   const uiTheme = uiThemeRaw === 'system' || uiThemeRaw === 'light' || uiThemeRaw === 'dark' ? uiThemeRaw : undefined
+  const llmDebugEnabled = Boolean((parsed as Record<string, unknown>).llmDebugEnabled)
 
   const llmObj = typeof parsed.llm === 'object' && parsed.llm !== null ? (parsed.llm as Record<string, unknown>) : {}
 
@@ -59,6 +60,7 @@ export function normalizeConfigFromUnknown(value: unknown): AppConfig | null {
     cultureInvariant: parsed.cultureInvariant === undefined ? true : Boolean(parsed.cultureInvariant),
     showSoldVehicles: Boolean((parsed as Record<string, unknown>).showSoldVehicles),
     ...(uiTheme ? { uiTheme } : null),
+    ...(llmDebugEnabled ? { llmDebugEnabled: true } : null),
     useProxy: Boolean(parsed.useProxy),
     llm: {
       providerOrder,

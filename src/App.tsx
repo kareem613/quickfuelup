@@ -21,20 +21,22 @@ export default function App() {
   }, [howItWorksDismissed, location.hash, location.pathname, location.search, navigate])
 
   return (
-    <>
-      <Routes>
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/new" element={<NewEntryPage />} />
-        <Route path="/service" element={<NewServiceRecordPage />} />
-        <Route path="/review" element={<ReviewPage />} />
-        <Route path="/how-it-works" element={<HowItWorksPage onDismiss={() => setHowItWorksDismissed(true)} />} />
-        <Route path="/" element={<Navigate to="/new" replace />} />
-        <Route path="*" element={<Navigate to="/new" replace />} />
-      </Routes>
+    <div className="app-shell">
+      <main className="app-main">
+        <Routes>
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/new" element={<NewEntryPage />} />
+          <Route path="/service" element={<NewServiceRecordPage />} />
+          <Route path="/review" element={<ReviewPage />} />
+          <Route path="/how-it-works" element={<HowItWorksPage onDismiss={() => setHowItWorksDismissed(true)} />} />
+          <Route path="/" element={<Navigate to="/new" replace />} />
+          <Route path="*" element={<Navigate to="/new" replace />} />
+        </Routes>
+      </main>
 
       <footer className="app-footer muted">
         v{__APP_VERSION__} ({__GIT_SHA__})
       </footer>
-    </>
+    </div>
   )
 }

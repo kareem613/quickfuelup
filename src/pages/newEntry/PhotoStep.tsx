@@ -1,4 +1,5 @@
 import type { ReactNode, RefObject } from 'react'
+import { CollapsibleCard } from '../../components/ui/CollapsibleCard'
 
 export function PhotoStep(props: {
   stepNumber: 2 | 3
@@ -22,15 +23,20 @@ export function PhotoStep(props: {
   fileIcon: ReactNode
 }) {
   const disabled = !props.enabled || props.submitBusy
+  const headerTitle = (
+    <strong>
+      {props.stepNumber}) {props.title}
+    </strong>
+  )
+  const headerRight = props.stepDone ? props.doneIcon : <span className="muted">Required</span>
   return (
-    <div className={`card stack${props.stepDone && !props.open ? ' collapsed' : ''}`} style={{ opacity: props.enabled ? 1 : 0.6 }}>
-      <button className="row card-header-btn" type="button" onClick={props.onToggle}>
-        <strong>
-          {props.stepNumber}) {props.title}
-        </strong>
-        {props.stepDone ? props.doneIcon : <span className="muted">Required</span>}
-      </button>
-      {props.stepDone && !props.open ? null : (
+    <CollapsibleCard
+      title={headerTitle}
+      open={props.open || !props.stepDone}
+      onToggle={props.onToggle}
+      right={headerRight}
+      disabled={!props.enabled}
+    >
         <>
           <div className={`image-preview clickable split${disabled ? ' disabled' : ''}`}>
             {props.imageUrl ? <img src={props.imageUrl} alt={`${props.title} preview`} /> : null}
@@ -64,8 +70,6 @@ export function PhotoStep(props: {
           />
           <div className="muted">{props.selectedLabel}</div>
         </>
-      )}
-    </div>
+    </CollapsibleCard>
   )
 }
-

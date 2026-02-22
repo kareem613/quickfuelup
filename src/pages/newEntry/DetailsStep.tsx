@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Card } from '../../components/ui/Card'
 
 export function DetailsStep(props: {
   canEditDetails: boolean
@@ -22,7 +23,7 @@ export function DetailsStep(props: {
   primaryButton: ReactNode
 }) {
   return (
-    <div className="card stack" style={{ opacity: props.canEditDetails ? 1 : 0.6 }}>
+    <Card style={{ opacity: props.canEditDetails ? 1 : 0.6 }}>
       <div className="row">
         <strong>5) Details</strong>
         <span />
@@ -70,6 +71,6 @@ export function DetailsStep(props: {
           Start over
         </button>
       </div>
-    </div>
+    </Card>
   )
 }

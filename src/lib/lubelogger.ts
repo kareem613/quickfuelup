@@ -64,7 +64,21 @@ export async function getVehicles(cfg: AppConfig, opts?: { includeSold?: boolean
 
       const name = String(byName ?? derived ?? `Vehicle ${id}`)
       const imageLocation = typeof obj.imageLocation === 'string' ? obj.imageLocation : undefined
-      return { id, name, imageLocation }
+
+      const extraFields = Array.isArray(obj.extraFields) ? obj.extraFields : Array.isArray(obj.ExtraFields) ? obj.ExtraFields : []
+      const vin =
+        extraFields
+          .map((ef) => {
+            if (typeof ef !== 'object' || ef === null) return null
+            const efo = ef as Record<string, unknown>
+            const name = typeof efo.name === 'string' ? efo.name : typeof efo.Name === 'string' ? efo.Name : null
+            if (!name || name.toLowerCase() !== 'vin') return null
+            const value = typeof efo.value === 'string' ? efo.value : typeof efo.Value === 'string' ? efo.Value : null
+            return value?.trim() ? value.trim() : null
+          })
+          .find((x): x is string => Boolean(x)) ?? undefined
+
+      return { id, name, imageLocation, ...(vin ? { vin } : null) }
     })
     .filter((v): v is Vehicle => v !== null)
 }

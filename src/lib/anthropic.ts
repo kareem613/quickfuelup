@@ -1,5 +1,7 @@
 import { ExtractionSchema, parseJsonFromText } from './extraction'
 import { ServiceExtractionResultSchema } from './serviceExtraction'
+import type { LlmDebugEvent } from './llmDebug'
+import { buildFuelPrompt, buildServicePrompt } from './prompts'
 
 async function blobToBase64(blob: Blob): Promise<string> {
   const arrayBuffer = await blob.arrayBuffer()
@@ -14,31 +16,50 @@ export async function extractFromImagesAnthropic(params: {
   model?: string
   pumpImage: Blob
   odometerImage: Blob
+  onDebugEvent?: (event: LlmDebugEvent) => void
 }) {
-  const prompt = `
- You will be given two photos:
-1) a gas pump display OR a fuel receipt showing total cost and quantity/volume
-2) a vehicle odometer display
-
-Extract these fields and return JSON ONLY matching this TypeScript type:
-{
-  "odometer": number | null,       // integer miles/km from odometer
-  "fuelQuantity": number | null,   // numeric quantity (gallons/liters) from pump
-  "totalCost": number | null,      // numeric total cost from pump
-  "explanation"?: string | null    // if you cannot determine one or more values, explain why
-}
-
-Rules:
-- Return only valid JSON (no markdown, no backticks).
-- Use '.' as decimal separator.
-- If you cannot determine a value, set it to null AND include a short explanation.
-- If a value can't be determined from an image, describe what that image appears to be (e.g. blurry dashboard, dark photo, receipt, random object), and end with a mildly sarcastic line like: "It's a photo of <what it looks like> — how do you expect me to read <missing value> from that?"
-`.trim()
+  const prompt = buildFuelPrompt()
 
   const [pumpB64, odoB64] = await Promise.all([
     blobToBase64(params.pumpImage),
     blobToBase64(params.odometerImage),
   ])
+
+  const body = {
+    model: params.model?.trim() || 'claude-haiku-4-5',
+    max_tokens: 300,
+    ...(params.onDebugEvent ? { stream: true } : null),
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: params.pumpImage.type || 'image/jpeg',
+              data: pumpB64,
+            },
+          },
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: params.odometerImage.type || 'image/jpeg',
+              data: odoB64,
+            },
+          },
+        ],
+      },
+    ],
+  }
+
+  params.onDebugEvent?.({
+    type: 'request',
+    provider: 'anthropic',
+    payload: { prompt },
+  })
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -48,54 +69,78 @@ Rules:
       'anthropic-dangerous-direct-browser-access': 'true',
       'x-api-key': params.apiKey,
     },
-    body: JSON.stringify({
-      model: params.model?.trim() || 'claude-haiku-4-5',
-      max_tokens: 300,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: prompt },
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: params.pumpImage.type || 'image/jpeg',
-                data: pumpB64,
-              },
-            },
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: params.odometerImage.type || 'image/jpeg',
-                data: odoB64,
-              },
-            },
-          ],
-        },
-      ],
-    }),
+    body: JSON.stringify(body),
   })
 
-  const text = (await res.text()).trim()
-  if (!res.ok) throw new Error(`Anthropic HTTP ${res.status}: ${text}`)
+  if (!res.ok) {
+    const text = (await res.text()).trim()
+    throw new Error(`Anthropic HTTP ${res.status}: ${text}`)
+  }
 
-  const data = JSON.parse(text) as unknown
-  const content =
-    typeof data === 'object' && data !== null && Array.isArray((data as Record<string, unknown>).content)
-      ? ((data as Record<string, unknown>).content as unknown[])
-      : []
-  const joined = content
-    .map((c) => {
-      if (typeof c !== 'object' || c === null) return null
-      const obj = c as Record<string, unknown>
-      if (obj.type !== 'text') return null
-      return typeof obj.text === 'string' ? obj.text : null
-    })
-    .filter((t): t is string => Boolean(t))
-    .join('\n')
-    .trim()
+  let joined = ''
+  if (params.onDebugEvent) {
+    if (!res.body) throw new Error('Anthropic stream body missing.')
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buf = ''
+    let textAcc = ''
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+      while (true) {
+        const sep = buf.indexOf('\n\n')
+        if (sep === -1) break
+        const rawEvent = buf.slice(0, sep)
+        buf = buf.slice(sep + 2)
+        const dataLines = rawEvent
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l.startsWith('data:'))
+          .map((l) => l.slice('data:'.length).trim())
+          .filter(Boolean)
+        if (!dataLines.length) continue
+
+        for (const dataStr of dataLines) {
+          if (dataStr === '[DONE]') continue
+          params.onDebugEvent({ type: 'chunk', provider: 'anthropic', chunk: `data: ${dataStr}` })
+          let evt: unknown
+          try {
+            evt = JSON.parse(dataStr)
+          } catch {
+            continue
+          }
+          if (typeof evt !== 'object' || evt === null) continue
+          const obj = evt as Record<string, unknown>
+          if (obj.type === 'content_block_delta') {
+            const delta = typeof obj.delta === 'object' && obj.delta !== null ? (obj.delta as Record<string, unknown>) : null
+            const textDelta = delta && typeof delta.text === 'string' ? delta.text : ''
+            if (textDelta) textAcc += textDelta
+          }
+        }
+      }
+    }
+    joined = textAcc.trim()
+    const json = parseJsonFromText(joined, 'Anthropic did not return JSON')
+    params.onDebugEvent({ type: 'response', provider: 'anthropic', payload: json })
+  } else {
+    const text = (await res.text()).trim()
+    const data = JSON.parse(text) as unknown
+    const content =
+      typeof data === 'object' && data !== null && Array.isArray((data as Record<string, unknown>).content)
+        ? ((data as Record<string, unknown>).content as unknown[])
+        : []
+    joined = content
+      .map((c) => {
+        if (typeof c !== 'object' || c === null) return null
+        const obj = c as Record<string, unknown>
+        if (obj.type !== 'text') return null
+        return typeof obj.text === 'string' ? obj.text : null
+      })
+      .filter((t): t is string => Boolean(t))
+      .join('\n')
+      .trim()
+  }
 
   if (!joined) throw new Error('Anthropic did not return text.')
 
@@ -110,75 +155,23 @@ export async function extractServiceFromDocumentAnthropic(params: {
   model?: string
   images?: Blob[]
   documentText?: string
-  vehicles: { id: number; name: string }[]
+  vehicles: { id: number; name: string; vin?: string }[]
   extraFieldNamesByRecordType?: Record<string, string[]>
   onThinking?: (message: string) => void
+  onDebugEvent?: (event: LlmDebugEvent) => void
 }) {
-  const vehiclesText = params.vehicles.map((v) => `- ${v.id}: ${v.name}`).join('\n')
+  const vehiclesText = params.vehicles.map((v) => `- ${v.id}: ${v.name}${v.vin ? ` (VIN: ${v.vin})` : ''}`).join('\n')
   const extraFieldsText = params.extraFieldNamesByRecordType
     ? Object.entries(params.extraFieldNamesByRecordType)
         .map(([k, names]) => `- ${k}: ${names.length ? names.join(', ') : '(none configured)'}`)
         .join('\n')
     : '(not provided)'
 
-  const prompt = `
- You will be given a vehicle service invoice/receipt as text and/or images.
-
- Your job is to create a sensible set of LubeLogger records from this document.
- This is NOT necessarily one record per line item: group logically into records that represent one service event/visit.
-
-  Return JSON ONLY matching this TypeScript type:
-  {
-   "records": Array<{
-     "recordType": "service" | "repair" | "upgrade" | null,
-     "vehicleId": number | null,
-     "date": string | null,
-     "odometer": number | null,
-     "description": string | null,   // VERY concise summary (e.g. "AC repair", "Oil change")
-     "totalCost": number | null,
-     "notes"?: string | null,
-     "tags"?: string | null,
-     "extraFields"?: { "name": string, "value": string }[] | null,
-     "explanation"?: string | null
-   }>,
-   "explanation"?: string | null,
-   "warnings"?: Array<{
-     "path": string, // e.g. "/records/0/odometer"
-     "reason": "missing" | "guessed" | "uncertain" | "conflict",
-     "message"?: string | null
-   }>
- }
-
-Available vehicles (pick one vehicleId if confident OR if you can make a reasonable educated guess; otherwise null):
-${vehiclesText}
-
-Configured LubeLogger extra fields by record type (prefer these names if they match):
-${extraFieldsText}
-
-Document text (may be empty for scanned PDFs):
-${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(none)'}
-
-   Rules:
-   - Return only valid JSON (no markdown, no backticks).
-   - Use '.' as decimal separator.
-   - Still make your best educated guess when the document strongly suggests a value (e.g. vehicleId from invoice header). Only use null when you truly cannot determine a value.
-   - If any value is missing (null), guessed, uncertain, or conflicting, include a warning in "warnings" for that field.
-    - Use paths like: /records/<index>/<fieldName> (e.g. /records/0/vehicleId, /records/0/odometer, /records/1/totalCost).
-    - Keep warning messages short and user-friendly.
-  - If you choose a recordType, choose the one that best matches the work (service=scheduled maintenance, repair=unplanned fix, upgrade=enhancement).
-  - Create between 1 and 8 records; prefer fewer records unless there are clearly distinct visits/dates/vehicles.
-  - Do not produce a record for every part.
-  - Keep "description" VERY concise (2-6 words). Put the detailed work performed (parts/labor/steps) in "notes".
-   Example: description="AC repair", notes="Evacuated/recharged system; replaced condenser; replaced O-rings; leak test; added dye."
- - Cost math (do this when the invoice is itemized and shows subtotal/tax/total):
-   - Treat EVERY charge as a line item amount that must be counted: parts, labor, fees, shop supplies, discounts/credits (negative), etc.
-   - Assign each line item to exactly one record (based on your logical grouping), then compute each record's pre-tax subtotal by summing its line items (parts + labor + fees).
-   - Make sure the SUM of all record pre-tax subtotals matches the invoice SUBTOTAL (pre-tax). If the invoice subtotal doesn't match the sum of itemized lines, mention it in "explanation".
-   - If the invoice shows tax amount and/or tax rate, allocate tax across records proportionally by each record's pre-tax subtotal, round to cents, and adjust the final record by any rounding remainder so totals match.
-   - Set each record's "totalCost" to (record pre-tax subtotal + allocated tax, if any). Ensure the SUM of all record totalCost values matches the invoice TOTAL as closely as possible.
-   - If you cannot confidently allocate costs per record, keep the records but set some totalCost to null and explain the uncertainty in "explanation".
- - If you cannot determine a value, set it to null and briefly explain why in explanation.
-`.trim()
+  const { prompt, debugPrompt } = buildServicePrompt({
+    vehiclesText,
+    extraFieldsText,
+    documentText: params.documentText,
+  })
 
   const imageBlobs = (params.images ?? []).slice(0, 3)
   const imageB64s = await Promise.all(imageBlobs.map((b) => blobToBase64(b)))
@@ -195,6 +188,26 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
     })
   }
 
+  const body = {
+    model: params.model?.trim() || 'claude-haiku-4-5',
+    // When extended thinking is enabled, max_tokens must be > thinking.budget_tokens.
+    max_tokens: 2048,
+    ...(params.onThinking || params.onDebugEvent
+      ? {
+          stream: true,
+          // Extended thinking: stream only the thinking block to the UI.
+          ...(params.onThinking ? { thinking: { type: 'enabled', budget_tokens: 1024 } } : null),
+        }
+      : null),
+    messages: [{ role: 'user', content }],
+  }
+
+  params.onDebugEvent?.({
+    type: 'request',
+    provider: 'anthropic',
+    payload: { prompt: debugPrompt },
+  })
+
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -203,19 +216,7 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
       'anthropic-dangerous-direct-browser-access': 'true',
       'x-api-key': params.apiKey,
     },
-    body: JSON.stringify({
-      model: params.model?.trim() || 'claude-haiku-4-5',
-      // When extended thinking is enabled, max_tokens must be > thinking.budget_tokens.
-      max_tokens: 2048,
-      ...(params.onThinking
-        ? {
-            stream: true,
-            // Extended thinking: stream only the thinking block to the UI.
-            thinking: { type: 'enabled', budget_tokens: 1024 },
-          }
-        : null),
-      messages: [{ role: 'user', content }],
-    }),
+    body: JSON.stringify(body),
   })
 
   if (!res.ok) {
@@ -224,7 +225,7 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
   }
 
   let joined = ''
-  if (params.onThinking) {
+  if (params.onThinking || params.onDebugEvent) {
     if (!res.body) throw new Error('Anthropic stream body missing.')
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
@@ -270,6 +271,7 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
 
         for (const dataStr of dataLines) {
           if (dataStr === '[DONE]') continue
+          if (params.onDebugEvent) params.onDebugEvent({ type: 'chunk', provider: 'anthropic', chunk: `data: ${dataStr}` })
           let evt: unknown
           try {
             evt = JSON.parse(dataStr)
@@ -312,7 +314,7 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
               const nextThinking = nextParagraph ? summarizeThinkingLine(nextParagraph) : null
               if (nextThinking && nextThinking !== lastThinkingSent) {
                 lastThinkingSent = nextThinking
-                params.onThinking(nextThinking)
+                params.onThinking?.(nextThinking)
               }
             } else if ((deltaType === 'text_delta' || blockType === 'text') && textDelta) {
               textAcc += textDelta
@@ -322,6 +324,10 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
       }
     }
     joined = textAcc.trim()
+    if (params.onDebugEvent) {
+      const json = parseJsonFromText(joined, 'Anthropic did not return JSON')
+      params.onDebugEvent({ type: 'response', provider: 'anthropic', payload: json })
+    }
   } else {
     const text = (await res.text()).trim()
     const data = JSON.parse(text) as unknown

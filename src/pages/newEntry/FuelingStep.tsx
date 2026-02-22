@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Card } from '../../components/ui/Card'
 
 export function FuelingStep(props: {
   canEditDetails: boolean
@@ -23,7 +24,7 @@ export function FuelingStep(props: {
 }) {
   const showRetry = props.hasLlmResponse && !props.extractBusy
   return (
-    <div className={`card stack${props.extractBusy ? ' extracting' : ''}`} style={{ opacity: props.canEditDetails ? 1 : 0.6 }}>
+    <Card extracting={props.extractBusy} style={{ opacity: props.canEditDetails ? 1 : 0.6 }}>
       <div className="row">
         <strong>4) Fueling</strong>
         <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
@@ -83,6 +84,6 @@ export function FuelingStep(props: {
           />
         </div>
       </div>
-    </div>
+    </Card>
   )
 }
