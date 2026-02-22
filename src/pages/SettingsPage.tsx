@@ -44,6 +44,7 @@ export default function SettingsPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const existing = useMemo(() => loadConfig(), [])
+  const [tab, setTab] = useState<'ui' | 'lubelogger' | 'llm'>('lubelogger')
   const [baseUrl, setBaseUrl] = useState(existing?.baseUrl ?? '')
   const [lubeLoggerApiKey, setLubeLoggerApiKey] = useState(existing?.lubeLoggerApiKey ?? '')
   const [providerOrder, setProviderOrder] = useState<LlmProvider[]>(() => {
@@ -68,6 +69,10 @@ export default function SettingsPage() {
   const [cultureInvariant, setCultureInvariant] = useState(existing?.cultureInvariant ?? true)
   const [showSoldVehicles, setShowSoldVehicles] = useState(existing?.showSoldVehicles ?? false)
   const [uiTheme, setUiTheme] = useState<ThemePreference>(() => existing?.uiTheme ?? loadThemePreference())
+  const [geminiOpen, setGeminiOpen] = useState(() => Boolean(geminiApiKey.trim() || geminiModelFuel.trim() || geminiModelService.trim()))
+  const [anthropicOpen, setAnthropicOpen] = useState(() =>
+    Boolean(anthropicApiKey.trim() || anthropicModelFuel.trim() || anthropicModelService.trim()),
+  )
   const [testResult, setTestResult] = useState<string | null>(null)
   const [busyTest, setBusyTest] = useState(false)
   const [connectedAs, setConnectedAs] = useState<{ username: string; isAdmin: boolean } | null>(null)
@@ -113,6 +118,10 @@ export default function SettingsPage() {
       window.removeEventListener('appinstalled', onAny)
     }
   }, [])
+
+  useEffect(() => {
+    if (tab !== 'llm') setOpenModelPicker(null)
+  }, [tab])
 
   const hasAnyLlmKey = Boolean(geminiApiKey.trim() || anthropicApiKey.trim())
   const canSave = Boolean(baseUrl.trim() && lubeLoggerApiKey.trim())
@@ -533,23 +542,34 @@ export default function SettingsPage() {
       <TopNav />
       <h2 style={{ margin: 0 }}>Settings</h2>
 
-      <div className="card stack">
-        <strong>UI settings</strong>
-        <div className="field">
-          <label>Theme</label>
-          <select
-            value={uiTheme}
-            onChange={(e) => {
-              const v = e.target.value
-              if (v === 'system' || v === 'dark' || v === 'light') onSetTheme(v)
-            }}
-          >
-            <option value="system">System</option>
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-          </select>
-        </div>
-        <div className="muted">System follows your device theme.</div>
+      <div className="tabs" role="tablist" aria-label="Settings tabs">
+        <button
+          type="button"
+          className={`tab-btn${tab === 'ui' ? ' active' : ''}`}
+          role="tab"
+          aria-selected={tab === 'ui'}
+          onClick={() => setTab('ui')}
+        >
+          UI
+        </button>
+        <button
+          type="button"
+          className={`tab-btn${tab === 'lubelogger' ? ' active' : ''}`}
+          role="tab"
+          aria-selected={tab === 'lubelogger'}
+          onClick={() => setTab('lubelogger')}
+        >
+          LubeLogger
+        </button>
+        <button
+          type="button"
+          className={`tab-btn${tab === 'llm' ? ' active' : ''}`}
+          role="tab"
+          aria-selected={tab === 'llm'}
+          onClick={() => setTab('llm')}
+        >
+          LLM
+        </button>
       </div>
 
       {importToken && importModalOpen ? (
@@ -754,285 +774,37 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
-      ) : null}
+       ) : null}
 
-      <div className="card stack">
-        <div className="field">
-          <label>LubeLogger Base URL</label>
-          <input
-            placeholder="https://your.lubelogger.host"
-            value={baseUrl}
-            onChange={(e) => setBaseUrl(e.target.value)}
-            autoCapitalize="none"
-            autoCorrect="off"
-            inputMode="url"
-          />
-        </div>
+      {tab === 'ui' ? (
+        <div className="stack" role="tabpanel" aria-label="UI settings">
+          <div className="card stack">
+            <strong>UI</strong>
+            <div className="field">
+              <label>Theme</label>
+              <select
+                value={uiTheme}
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (v === 'system' || v === 'dark' || v === 'light') onSetTheme(v)
+                }}
+              >
+                <option value="system">System</option>
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+              </select>
+            </div>
+            <div className="muted">System follows your device theme.</div>
 
-        <div className="field">
-          <label>LubeLogger API Key (x-api-key)</label>
-          <input
-            value={lubeLoggerApiKey}
-            onChange={(e) => setLubeLoggerApiKey(e.target.value)}
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-          />
-        </div>
-
-        <label className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
-          <input
-            type="checkbox"
-            checked={cultureInvariant}
-            onChange={(e) => setCultureInvariant(e.target.checked)}
-          />
-          <span>Send LubeLogger “culture-invariant” header</span>
-        </label>
-
-        <label className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
-          <input type="checkbox" checked={showSoldVehicles} onChange={(e) => setShowSoldVehicles(e.target.checked)} />
-          <span>Show sold vehicles</span>
-        </label>
-
-        <div className="field">
-          <label>LLM order</label>
-          <div className="stack" style={{ gap: 8 }}>
-                {activeProviders.length ? (
-                  activeProviders.map((p, idx) => (
-               <div key={p} className="row llm-order-item" aria-label={`LLM priority ${idx + 1}: ${providerLabel(p)}`}>
-                 <strong>
-                   {idx + 1}. {providerLabel(p)}
-                 </strong>
-                 <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
-                  <button className="btn small" type="button" disabled={idx === 0} onClick={() => moveProvider(idx, idx - 1)}>
-                    ↑
-                  </button>
-                  <button
-                    className="btn small"
-                    type="button"
-                    disabled={idx === activeProviders.length - 1}
-                    onClick={() => moveProvider(idx, idx + 1)}
-                  >
-                    ↓
-                  </button>
-                </div>
-              </div>
-              ))
-            ) : (
-              <div className="muted">Add one or more LLM API keys below to enable extraction.</div>
-            )}
+            <label className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
+              <input type="checkbox" checked={showSoldVehicles} onChange={(e) => setShowSoldVehicles(e.target.checked)} />
+              <span>Show sold vehicles</span>
+            </label>
           </div>
-        </div>
 
-        <div className="field">
-          <label>Gemini API Key</label>
-          <input
-            value={geminiApiKey}
-            onChange={(e) => setGeminiApiKey(e.target.value)}
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-          />
-        </div>
-
-        <div className="field">
-          <label>Anthropic API Key</label>
-          <input
-            value={anthropicApiKey}
-            onChange={(e) => setAnthropicApiKey(e.target.value)}
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-          />
-        </div>
-
-        <div className="field">
-          <label>
-            Gemini model (Fuel) {costBadge('gemini', geminiModelFuel.trim() || DEFAULT_GEMINI_FUEL)}
-          </label>
-          <input
-            value={geminiModelFuel}
-            onChange={(e) => setGeminiModelFuel(normalizeModelInput(e.target.value))}
-            placeholder={`(default: ${DEFAULT_GEMINI_FUEL})`}
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            onFocus={() => openPicker('geminiFuel')}
-            onBlur={scheduleClosePicker}
-            disabled={geminiModelsLoading && openModelPicker === 'geminiFuel'}
-          />
-          {openModelPicker === 'geminiFuel' ? (
-            <div className="card stack" style={{ marginTop: 8, padding: 10 }}>
-              {geminiModelsLoading ? (
-                <div className="muted">Loading Gemini models…</div>
-              ) : (
-                sortedGeminiModels.map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    className="btn small"
-                    style={{ justifyContent: 'flex-start' }}
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      setGeminiModelFuel(m)
-                      setOpenModelPicker(null)
-                    }}
-                  >
-                    {m} ({costBadge('gemini', m)})
-                  </button>
-                ))
-              )}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="field">
-          <label>
-            Gemini model (Service) {costBadge('gemini', geminiModelService.trim() || DEFAULT_GEMINI_SERVICE)}
-          </label>
-          <input
-            value={geminiModelService}
-            onChange={(e) => setGeminiModelService(normalizeModelInput(e.target.value))}
-            placeholder={`(default: ${DEFAULT_GEMINI_SERVICE})`}
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            onFocus={() => openPicker('geminiService')}
-            onBlur={scheduleClosePicker}
-            disabled={geminiModelsLoading && openModelPicker === 'geminiService'}
-          />
-          {openModelPicker === 'geminiService' ? (
-            <div className="card stack" style={{ marginTop: 8, padding: 10 }}>
-              {geminiModelsLoading ? (
-                <div className="muted">Loading Gemini models…</div>
-              ) : (
-                sortedGeminiModels.map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    className="btn small"
-                    style={{ justifyContent: 'flex-start' }}
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      setGeminiModelService(m)
-                      setOpenModelPicker(null)
-                    }}
-                  >
-                    {m} ({costBadge('gemini', m)})
-                  </button>
-                ))
-              )}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="field">
-          <label>
-            Anthropic model (Fuel) {costBadge('anthropic', anthropicModelFuel.trim() || DEFAULT_ANTHROPIC_FUEL)}
-          </label>
-          <input
-            value={anthropicModelFuel}
-            onChange={(e) => setAnthropicModelFuel(normalizeModelInput(e.target.value))}
-            placeholder={`(default: ${DEFAULT_ANTHROPIC_FUEL})`}
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            onFocus={() => openPicker('anthropicFuel')}
-            onBlur={scheduleClosePicker}
-            disabled={anthropicModelsLoading && openModelPicker === 'anthropicFuel'}
-          />
-          {openModelPicker === 'anthropicFuel' ? (
-            <div className="card stack" style={{ marginTop: 8, padding: 10 }}>
-              {anthropicModelsLoading ? (
-                <div className="muted">Loading Anthropic models…</div>
-              ) : (
-                sortedAnthropicModels.map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    className="btn small"
-                    style={{ justifyContent: 'flex-start' }}
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      setAnthropicModelFuel(m)
-                      setOpenModelPicker(null)
-                    }}
-                  >
-                    {m} ({costBadge('anthropic', m)})
-                  </button>
-                ))
-              )}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="field">
-          <label>
-            Anthropic model (Service) {costBadge('anthropic', anthropicModelService.trim() || DEFAULT_ANTHROPIC_SERVICE)}
-          </label>
-          <input
-            value={anthropicModelService}
-            onChange={(e) => setAnthropicModelService(normalizeModelInput(e.target.value))}
-            placeholder={`(default: ${DEFAULT_ANTHROPIC_SERVICE})`}
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            onFocus={() => openPicker('anthropicService')}
-            onBlur={scheduleClosePicker}
-            disabled={anthropicModelsLoading && openModelPicker === 'anthropicService'}
-          />
-          {openModelPicker === 'anthropicService' ? (
-            <div className="card stack" style={{ marginTop: 8, padding: 10 }}>
-              {anthropicModelsLoading ? (
-                <div className="muted">Loading Anthropic models…</div>
-              ) : (
-                sortedAnthropicModels.map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    className="btn small"
-                    style={{ justifyContent: 'flex-start' }}
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      setAnthropicModelService(m)
-                      setOpenModelPicker(null)
-                    }}
-                  >
-                    {m} ({costBadge('anthropic', m)})
-                  </button>
-                ))
-              )}
-            </div>
-          ) : null}
-        </div>
-
-        {!hasAnyLlmKey ? <div className="muted">No LLM keys set. You can still enter values manually.</div> : null}
-
-        <div className="actions">
-          <button
-            className={`btn${connectedAs ? ' success' : ''}`}
-            onClick={onTestConnection}
-            disabled={!cfg || busyTest}
-          >
-            {busyTest ? 'Testing…' : 'Test connection'}
-          </button>
-          <button className="btn primary" onClick={onSave} disabled={!cfg || busyTest}>
-            Save
-          </button>
-        </div>
-
-        {connectedAs ? (
-          <div className="muted">
-            Connected as <strong>{connectedAs.username}</strong>{' '}
-            <span className={`badge ${connectedAs.isAdmin ? 'ok' : 'no'}`}>
-              admin: {connectedAs.isAdmin ? 'yes' : 'no'}
-            </span>
-          </div>
-        ) : null}
-
-        {isPwaInstallEnabled() ? (
-          <div className="actions">
-            {isPwaInstallEnabled() && !isRunningStandalone() && installPromptReady ? (
+          {isPwaInstallEnabled() && !isRunningStandalone() && installPromptReady ? (
+            <div className="card stack">
+              <strong>App</strong>
               <button
                 className="btn"
                 type="button"
@@ -1049,25 +821,332 @@ export default function SettingsPage() {
               >
                 Install app
               </button>
+              <div className="muted">Install appears after a successful connection test.</div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {tab === 'lubelogger' ? (
+        <div className="stack" role="tabpanel" aria-label="LubeLogger settings">
+          <div className="card stack">
+            <strong>LubeLogger</strong>
+            <div className="field">
+              <label>LubeLogger Base URL</label>
+              <input
+                placeholder="https://your.lubelogger.host"
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                autoCapitalize="none"
+                autoCorrect="off"
+                inputMode="url"
+              />
+            </div>
+
+            <div className="field">
+              <label>LubeLogger API Key (x-api-key)</label>
+              <input
+                value={lubeLoggerApiKey}
+                onChange={(e) => setLubeLoggerApiKey(e.target.value)}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+            </div>
+
+            <label className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
+              <input type="checkbox" checked={cultureInvariant} onChange={(e) => setCultureInvariant(e.target.checked)} />
+              <span>Send LubeLogger “culture-invariant” header</span>
+            </label>
+
+            <div className="actions">
+              <button className={`btn${connectedAs ? ' success' : ''}`} onClick={onTestConnection} disabled={!cfg || busyTest}>
+                {busyTest ? 'Testing…' : 'Test connection'}
+              </button>
+              <button className="btn primary" onClick={onSave} disabled={!cfg || busyTest}>
+                Save
+              </button>
+            </div>
+
+            {connectedAs ? (
+              <div className="muted">
+                Connected as <strong>{connectedAs.username}</strong>{' '}
+                <span className={`badge ${connectedAs.isAdmin ? 'ok' : 'no'}`}>admin: {connectedAs.isAdmin ? 'yes' : 'no'}</span>
+              </div>
             ) : null}
 
-            <button
-              className="btn"
-              type="button"
-              onClick={() => {
-                setShareModalOpen(true)
-                setShareError(null)
-                setShareLink(null)
-              }}
-              disabled={!cfg || busyTest}
-            >
-              Share settings
-            </button>
+            {testResult ? <div className={testResult.startsWith('OK') ? 'card' : 'error'}>{testResult}</div> : null}
           </div>
-        ) : null}
 
-        {testResult && <div className={testResult.startsWith('OK') ? 'card' : 'error'}>{testResult}</div>}
-      </div>
+          {isPwaInstallEnabled() ? (
+            <div className="card stack">
+              <strong>Share / Import</strong>
+              <div className="actions">
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    setShareModalOpen(true)
+                    setShareError(null)
+                    setShareLink(null)
+                  }}
+                  disabled={!cfg || busyTest}
+                >
+                  Share settings
+                </button>
+              </div>
+              <div className="muted">To import, open a shared link (it will prompt for the passcode).</div>
+            </div>
+          ) : (
+            <div className="muted">Test connection to enable sharing and install.</div>
+          )}
+        </div>
+      ) : null}
+
+      {tab === 'llm' ? (
+        <div className="stack" role="tabpanel" aria-label="LLM settings">
+          <div className="card stack">
+            <strong>Extraction (LLM)</strong>
+            <div className="field">
+              <label>LLM order</label>
+              <div className="stack" style={{ gap: 8 }}>
+                {activeProviders.length ? (
+                  activeProviders.map((p, idx) => (
+                    <div key={p} className="row llm-order-item" aria-label={`LLM priority ${idx + 1}: ${providerLabel(p)}`}>
+                      <strong>
+                        {idx + 1}. {providerLabel(p)}
+                      </strong>
+                      <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                        <button className="btn small" type="button" disabled={idx === 0} onClick={() => moveProvider(idx, idx - 1)}>
+                          ↑
+                        </button>
+                        <button
+                          className="btn small"
+                          type="button"
+                          disabled={idx === activeProviders.length - 1}
+                          onClick={() => moveProvider(idx, idx + 1)}
+                        >
+                          ↓
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="muted">Add one or more LLM API keys below to enable extraction.</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className={`card stack${geminiOpen ? '' : ' collapsed'}`}>
+            <div className="row" style={{ justifyContent: 'space-between', gap: 10 }}>
+              <button className="row card-header-btn" type="button" onClick={() => setGeminiOpen((v) => !v)}>
+                <strong>Gemini</strong>
+              </button>
+              <span className="muted">{geminiApiKey.trim() ? 'Configured' : 'Not set'}</span>
+            </div>
+            {!geminiOpen ? null : (
+              <>
+                <div className="field">
+                  <label>Gemini API Key</label>
+                  <input
+                    value={geminiApiKey}
+                    onChange={(e) => setGeminiApiKey(e.target.value)}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                </div>
+
+                <div className="field">
+                  <label>
+                    Model (Fuel) {costBadge('gemini', geminiModelFuel.trim() || DEFAULT_GEMINI_FUEL)}
+                  </label>
+                  <input
+                    value={geminiModelFuel}
+                    onChange={(e) => setGeminiModelFuel(normalizeModelInput(e.target.value))}
+                    placeholder={`(default: ${DEFAULT_GEMINI_FUEL})`}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    onFocus={() => openPicker('geminiFuel')}
+                    onBlur={scheduleClosePicker}
+                    disabled={geminiModelsLoading && openModelPicker === 'geminiFuel'}
+                  />
+                  {openModelPicker === 'geminiFuel' ? (
+                    <div className="card stack" style={{ marginTop: 8, padding: 10 }}>
+                      {geminiModelsLoading ? (
+                        <div className="muted">Loading Gemini models…</div>
+                      ) : (
+                        sortedGeminiModels.map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            className="btn small"
+                            style={{ justifyContent: 'flex-start' }}
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              setGeminiModelFuel(m)
+                              setOpenModelPicker(null)
+                            }}
+                          >
+                            {m} ({costBadge('gemini', m)})
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="field">
+                  <label>
+                    Model (Service) {costBadge('gemini', geminiModelService.trim() || DEFAULT_GEMINI_SERVICE)}
+                  </label>
+                  <input
+                    value={geminiModelService}
+                    onChange={(e) => setGeminiModelService(normalizeModelInput(e.target.value))}
+                    placeholder={`(default: ${DEFAULT_GEMINI_SERVICE})`}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    onFocus={() => openPicker('geminiService')}
+                    onBlur={scheduleClosePicker}
+                    disabled={geminiModelsLoading && openModelPicker === 'geminiService'}
+                  />
+                  {openModelPicker === 'geminiService' ? (
+                    <div className="card stack" style={{ marginTop: 8, padding: 10 }}>
+                      {geminiModelsLoading ? (
+                        <div className="muted">Loading Gemini models…</div>
+                      ) : (
+                        sortedGeminiModels.map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            className="btn small"
+                            style={{ justifyContent: 'flex-start' }}
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              setGeminiModelService(m)
+                              setOpenModelPicker(null)
+                            }}
+                          >
+                            {m} ({costBadge('gemini', m)})
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className={`card stack${anthropicOpen ? '' : ' collapsed'}`}>
+            <div className="row" style={{ justifyContent: 'space-between', gap: 10 }}>
+              <button className="row card-header-btn" type="button" onClick={() => setAnthropicOpen((v) => !v)}>
+                <strong>Anthropic</strong>
+              </button>
+              <span className="muted">{anthropicApiKey.trim() ? 'Configured' : 'Not set'}</span>
+            </div>
+            {!anthropicOpen ? null : (
+              <>
+                <div className="field">
+                  <label>Anthropic API Key</label>
+                  <input
+                    value={anthropicApiKey}
+                    onChange={(e) => setAnthropicApiKey(e.target.value)}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                </div>
+
+                <div className="field">
+                  <label>
+                    Model (Fuel) {costBadge('anthropic', anthropicModelFuel.trim() || DEFAULT_ANTHROPIC_FUEL)}
+                  </label>
+                  <input
+                    value={anthropicModelFuel}
+                    onChange={(e) => setAnthropicModelFuel(normalizeModelInput(e.target.value))}
+                    placeholder={`(default: ${DEFAULT_ANTHROPIC_FUEL})`}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    onFocus={() => openPicker('anthropicFuel')}
+                    onBlur={scheduleClosePicker}
+                    disabled={anthropicModelsLoading && openModelPicker === 'anthropicFuel'}
+                  />
+                  {openModelPicker === 'anthropicFuel' ? (
+                    <div className="card stack" style={{ marginTop: 8, padding: 10 }}>
+                      {anthropicModelsLoading ? (
+                        <div className="muted">Loading Anthropic models…</div>
+                      ) : (
+                        sortedAnthropicModels.map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            className="btn small"
+                            style={{ justifyContent: 'flex-start' }}
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              setAnthropicModelFuel(m)
+                              setOpenModelPicker(null)
+                            }}
+                          >
+                            {m} ({costBadge('anthropic', m)})
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="field">
+                  <label>
+                    Model (Service) {costBadge('anthropic', anthropicModelService.trim() || DEFAULT_ANTHROPIC_SERVICE)}
+                  </label>
+                  <input
+                    value={anthropicModelService}
+                    onChange={(e) => setAnthropicModelService(normalizeModelInput(e.target.value))}
+                    placeholder={`(default: ${DEFAULT_ANTHROPIC_SERVICE})`}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    onFocus={() => openPicker('anthropicService')}
+                    onBlur={scheduleClosePicker}
+                    disabled={anthropicModelsLoading && openModelPicker === 'anthropicService'}
+                  />
+                  {openModelPicker === 'anthropicService' ? (
+                    <div className="card stack" style={{ marginTop: 8, padding: 10 }}>
+                      {anthropicModelsLoading ? (
+                        <div className="muted">Loading Anthropic models…</div>
+                      ) : (
+                        sortedAnthropicModels.map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            className="btn small"
+                            style={{ justifyContent: 'flex-start' }}
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              setAnthropicModelService(m)
+                              setOpenModelPicker(null)
+                            }}
+                          >
+                            {m} ({costBadge('anthropic', m)})
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            )}
+          </div>
+
+          {!hasAnyLlmKey ? <div className="muted">No LLM keys set. You can still enter values manually.</div> : null}
+        </div>
+      ) : null}
 
       {!existing && (
         <div className="muted">
