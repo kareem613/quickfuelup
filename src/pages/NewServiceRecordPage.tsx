@@ -9,6 +9,10 @@ import { extractServiceFromDocumentWithFallback } from '../lib/llm'
 import { addServiceLikeRecord, getExtraFields, getVehicles, uploadDocuments } from '../lib/lubelogger'
 import { pdfToTextAndImages } from '../lib/pdf'
 import type { ServiceDraft, ServiceDraftRecord, ServiceLikeRecordType, Vehicle } from '../lib/types'
+import { InvoiceStep } from './newServiceRecord/InvoiceStep'
+import { ExtractStep } from './newServiceRecord/ExtractStep'
+import { VehicleStep } from './newServiceRecord/VehicleStep'
+import { ReviewStep } from './newServiceRecord/ReviewStep'
 
 function numberOrEmpty(n: number | undefined) {
   return typeof n === 'number' && Number.isFinite(n) ? String(n) : ''
@@ -139,6 +143,7 @@ export default function NewServiceRecordPage() {
   const lastForceExtractTickRef = useRef(0)
   const lastExtractSigRef = useRef<string>('')
   const [successOpen, setSuccessOpen] = useState(false)
+  const [startOverConfirmOpen, setStartOverConfirmOpen] = useState(false)
 
   const vehicleTouched = useRef(false)
 
@@ -279,6 +284,15 @@ export default function NewServiceRecordPage() {
   const step3Done = Boolean(
     (draft.records?.length ? draft.records.every((r) => typeof r.form.vehicleId === 'number') : false) || draft.vehicleId,
   )
+  const extractedWarnings = draft.extracted?.warnings ?? []
+  const keepExtractOpen = extractFailed || extractedWarnings.length > 0
+
+  function hasWarningForRecordField(recordIdx: number, field: string) {
+    return extractedWarnings.some((w) => w.path === `/records/${recordIdx}/${field}`)
+  }
+
+  const anyVehicleIdWarning = extractedWarnings.some((w) => /^\/records\/\d+\/vehicleId$/.test(w.path))
+  const anyVehicleIdInvalid = (draft.records ?? []).some((r) => r.validationAttempted && typeof r.form.vehicleId !== 'number')
 
   useEffect(() => {
     if (!step1Done) {
@@ -295,8 +309,8 @@ export default function NewServiceRecordPage() {
       card2Touched.current = false
       return
     }
-    if (!card2Touched.current) setCard2Open(false)
-  }, [step2Done])
+    if (!card2Touched.current) setCard2Open(keepExtractOpen)
+  }, [keepExtractOpen, step2Done])
 
   useEffect(() => {
     if (!step3Done) {
@@ -304,8 +318,8 @@ export default function NewServiceRecordPage() {
       card3Touched.current = false
       return
     }
-    if (!card3Touched.current) setCard3Open(false)
-  }, [step3Done])
+    if (!card3Touched.current) setCard3Open(anyVehicleIdWarning)
+  }, [anyVehicleIdWarning, step3Done])
 
   const canExtractAny = Boolean(cfg && draft.document && providersWithKeys.length && (draft.documentImages?.length || draft.documentText))
 
@@ -314,6 +328,24 @@ export default function NewServiceRecordPage() {
       ...d,
       records: (d.records ?? []).map((r) => (r.id === id ? fn(r) : r)),
     }))
+  }
+
+  function updateRecordAndClearWarnings(params: {
+    id: string
+    clearPaths: string[]
+    fn: (r: ServiceDraftRecord) => ServiceDraftRecord
+  }) {
+    setDraft((d) => {
+      const extracted =
+        d.extracted?.warnings?.length && params.clearPaths.length
+          ? { ...d.extracted, warnings: d.extracted.warnings.filter((w) => !params.clearPaths.includes(w.path)) }
+          : d.extracted
+      return {
+        ...d,
+        extracted,
+        records: (d.records ?? []).map((r) => (r.id === params.id ? params.fn(r) : r)),
+      }
+    })
   }
 
   useEffect(() => {
@@ -344,44 +376,92 @@ export default function NewServiceRecordPage() {
           documentText: draft.documentText,
           vehicles,
           extraFieldNamesByRecordType,
+          onThinking: (m) => setExtractMessage(m),
         })
 
-        if (extracted.explanation) setExtractMessage(extracted.explanation)
+        setExtractMessage(extracted.explanation?.trim() ? extracted.explanation.trim() : 'Extraction complete.')
 
         const anySuggestedVehicle = extracted.records
           .map((r) => r.vehicleId)
           .find((id) => typeof id === 'number' && vehicles.some((v) => v.id === id))
 
-        const baseVehicleId = (!vehicleTouched.current && anySuggestedVehicle ? anySuggestedVehicle : draft.vehicleId) ?? null
+        setDraft((d) => {
+          const currentVehicleId = d.vehicleId
+          const baseVehicleId =
+            (anySuggestedVehicle && typeof currentVehicleId === 'number' && currentVehicleId !== anySuggestedVehicle
+              ? anySuggestedVehicle
+              : (!vehicleTouched.current && anySuggestedVehicle ? anySuggestedVehicle : currentVehicleId)) ?? null
 
-        const records: ServiceDraftRecord[] = extracted.records.map((r, idx) => {
-          const vehicleId =
-            typeof r.vehicleId === 'number' && vehicles.some((v) => v.id === r.vehicleId) ? r.vehicleId : baseVehicleId
-          const iso = normalizeToISODate(r.date)
+          // If the LLM suggests the same vehicle the user already selected (explicitly), treat vehicleId warnings as resolved/noise.
+          const cleanedExtracted =
+            vehicleTouched.current &&
+            anySuggestedVehicle &&
+            typeof currentVehicleId === 'number' &&
+            currentVehicleId === anySuggestedVehicle
+              ? {
+                  ...extracted,
+                  warnings: (extracted.warnings ?? []).filter((w) => !/^\/records\/\d+\/vehicleId$/.test(w.path)),
+                }
+              : extracted
+
+          const shouldWarnVehicle = Boolean(
+            anySuggestedVehicle &&
+              (!vehicleTouched.current || (typeof currentVehicleId === 'number' && currentVehicleId !== anySuggestedVehicle)),
+          )
+
+          const baseWarnings = cleanedExtracted.warnings ?? []
+          const warnings =
+            shouldWarnVehicle && cleanedExtracted.records.length
+              ? (() => {
+                  const next = baseWarnings.slice()
+                  for (let i = 0; i < cleanedExtracted.records.length; i++) {
+                    const path = `/records/${i}/vehicleId`
+                    if (next.some((w) => w.path === path)) continue
+                    next.push({
+                      path,
+                      reason: typeof currentVehicleId === 'number' && currentVehicleId !== anySuggestedVehicle ? 'conflict' : 'guessed',
+                      message:
+                        typeof currentVehicleId === 'number' && currentVehicleId !== anySuggestedVehicle
+                          ? 'Vehicle differs from your selection; please confirm.'
+                          : 'Vehicle was selected automatically; please confirm.',
+                    })
+                  }
+                  return next
+                })()
+              : baseWarnings
+
+          const extractedWithWarnings = shouldWarnVehicle ? { ...cleanedExtracted, warnings } : cleanedExtracted
+
+          const records: ServiceDraftRecord[] = extractedWithWarnings.records.map((r, idx) => {
+            const vehicleId =
+              typeof r.vehicleId === 'number' && vehicles.some((v) => v.id === r.vehicleId) ? r.vehicleId : baseVehicleId
+            const iso = normalizeToISODate(r.date)
+            return {
+              id: `rec-${idx + 1}`,
+              status: 'pending',
+              extracted: r,
+              form: {
+                vehicleId: vehicleId ?? undefined,
+                recordType: r.recordType ?? undefined,
+                date: iso ?? undefined,
+                odometer: r.odometer ?? undefined,
+                description: r.description ?? undefined,
+                cost: r.totalCost ?? undefined,
+                notes: r.notes ?? undefined,
+                tags: r.tags ?? undefined,
+                extraFields: (r.extraFields ?? undefined) ?? [],
+              },
+            }
+          })
+
           return {
-            id: `rec-${idx + 1}`,
-            status: 'pending',
-            extracted: r,
-            form: {
-              vehicleId: vehicleId ?? undefined,
-              recordType: r.recordType ?? undefined,
-              date: iso ?? undefined,
-              odometer: r.odometer ?? undefined,
-              description: r.description ?? undefined,
-              cost: r.totalCost ?? undefined,
-              notes: r.notes ?? undefined,
-              tags: r.tags ?? undefined,
-              extraFields: (r.extraFields ?? undefined) ?? [],
-            },
+            ...d,
+            // If the LLM suggests a different vehicle, prefer it over the current selection.
+            vehicleId: baseVehicleId ?? d.vehicleId,
+            extracted: extractedWithWarnings,
+            records,
           }
         })
-
-        setDraft((d) => ({
-          ...d,
-          vehicleId: !vehicleTouched.current && anySuggestedVehicle ? anySuggestedVehicle : d.vehicleId,
-          extracted,
-          records,
-        }))
       } catch (e) {
         setExtractFailed(true)
         setExtractMessage(e instanceof Error ? e.message : String(e))
@@ -417,11 +497,12 @@ export default function NewServiceRecordPage() {
 
   function recordCanSubmit(r: ServiceDraftRecord) {
     const req = requiredExtraFieldsFor(r.form.recordType)
+    const date = r.form.date ?? draft.date
     return (
       typeof r.form.vehicleId === 'number' &&
       Boolean(r.form.recordType) &&
-      typeof r.form.date === 'string' &&
-      Boolean(r.form.date) &&
+      typeof date === 'string' &&
+      Boolean(date) &&
       typeof r.form.odometer === 'number' &&
       Number.isFinite(r.form.odometer) &&
       r.form.odometer >= 0 &&
@@ -443,7 +524,12 @@ export default function NewServiceRecordPage() {
     const rec = (draft.records ?? []).find((r) => r.id === id)
     if (!rec) return
     if (!recordCanSubmit(rec)) {
-      setError('Please confirm vehicle, record type, date, odometer, description, cost, and required extra fields.')
+      const missingVehicle = typeof rec.form.vehicleId !== 'number'
+      if (missingVehicle) setCard3Open(true)
+      setDraft((d) => ({
+        ...d,
+        records: (d.records ?? []).map((r) => (r.id === id ? { ...r, validationAttempted: true } : r)),
+      }))
       return
     }
 
@@ -464,7 +550,7 @@ export default function NewServiceRecordPage() {
       const res = await addServiceLikeRecord(cfg, {
         recordType: rec.form.recordType!,
         vehicleId: rec.form.vehicleId!,
-        dateMMDDYYYY: toMMDDYYYY(rec.form.date!),
+        dateMMDDYYYY: toMMDDYYYY(rec.form.date ?? draft.date),
         odometer: rec.form.odometer!,
         description: rec.form.description!.trim(),
         cost: rec.form.cost!,
@@ -516,6 +602,15 @@ export default function NewServiceRecordPage() {
         </div>
       </div>
     )
+  }
+
+  async function resetAll() {
+    await clearServiceDraft()
+    vehicleTouched.current = false
+    lastExtractSigRef.current = ''
+    setExtractFailed(false)
+    setExtractMessage(null)
+    setDraft({ date: todayISODate() })
   }
 
   return (
@@ -582,415 +677,145 @@ export default function NewServiceRecordPage() {
         </div>
       ) : null}
 
-      <div className={`card stack${step1Done && !card1Open ? ' collapsed' : ''}`}>
-        <button
-          className="row card-header-btn"
-          type="button"
-          onClick={() => {
-            if (!step1Done) return
-            card1Touched.current = true
-            setCard1Open((v) => !v)
-          }}
+      {startOverConfirmOpen ? (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Start over confirmation"
+          onClick={() => setStartOverConfirmOpen(false)}
         >
-          <strong>1) Invoice / receipt (PDF or image)</strong>
-          {step1Done ? <DoneIcon /> : <span className="muted">Required</span>}
-        </button>
-        {step1Done && !card1Open ? null : (
-          <>
-            <div className={`image-preview clickable split${docBusy || submitBusy ? ' disabled' : ''}`}>
-              {previewUrl ? <img src={previewUrl} alt="Document preview" /> : null}
-              <div className="image-split-overlay" aria-hidden="true">
-                <button
-                  className="image-split-btn"
-                  type="button"
-                  onClick={() => docCameraInputRef.current?.click()}
-                  disabled={docBusy || submitBusy}
-                >
-                  <CameraIcon />
-                  <div>Camera</div>
-                </button>
-                <button
-                  className="image-split-btn"
-                  type="button"
-                  onClick={() => docFileInputRef.current?.click()}
-                  disabled={docBusy || submitBusy}
-                >
-                  <FileIcon />
-                  <div>Files</div>
-                </button>
-              </div>
-              {!previewUrl ? <div className="image-placeholder" aria-hidden="true" /> : null}
-            </div>
-            <input
-              ref={docCameraInputRef}
-              className="sr-only"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={(e) => onDocumentChange(e.target.files?.[0] ?? null)}
-              disabled={docBusy || submitBusy}
-            />
-            <input
-              ref={docFileInputRef}
-              className="sr-only"
-              type="file"
-              accept="application/pdf,image/*"
-              onChange={(e) => onDocumentChange(e.target.files?.[0] ?? null)}
-              disabled={docBusy || submitBusy}
-            />
-            <div className="muted">
-              {draft.document ? `Selected: ${draft.document.name}` : ''}
-              {draft.document && draft.documentText ? ` (text extracted)` : draft.document ? '' : ''}
-            </div>
-          </>
-        )}
-      </div>
-
-      <div
-        className={`card stack${extractBusy ? ' extracting' : ''}${step2Done && !card2Open ? ' collapsed' : ''}`}
-        style={{ opacity: step1Done ? 1 : 0.6 }}
-      >
-        <button
-          className="row card-header-btn"
-          type="button"
-          onClick={() => {
-            if (!step1Done) return
-            if (!step2Done) return
-            card2Touched.current = true
-            setCard2Open((v) => !v)
-          }}
-        >
-          <strong>2) Extract</strong>
-          {step2Done ? <DoneIcon /> : <span className="muted">Required</span>}
-        </button>
-
-        {step2Done && !card2Open ? null : !step1Done ? (
-          <div className="muted">Upload an invoice to start extraction.</div>
-        ) : (
-          <>
-            <div className="row" style={{ justifyContent: 'space-between' }}>
-              <div className="muted">{extractBusy ? 'Extracting records. This can take a minute.' : step2Done ? 'Done.' : 'Starting…'}</div>
+          <div className="modal card stack" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: 0 }}>Start over?</h3>
+            <div className="muted">You haven’t submitted yet. This will reset all fields.</div>
+            <div className="actions">
               <button
-                className="btn small"
-                disabled={!canExtractAny || extractBusy || submitBusy}
-                onClick={() => {
-                  setExtractFailed(false)
-                  setExtractMessage(null)
-                  lastExtractSigRef.current = ''
-                  setForceExtractTick((n) => n + 1)
-                  setDraft((d) => ({ ...d, extracted: undefined, records: undefined }))
-                }}
+                className="btn primary"
                 type="button"
-                aria-label="Retry extraction"
-                title="Retry"
+                onClick={async () => {
+                  setStartOverConfirmOpen(false)
+                  await resetAll()
+                }}
               >
-                <RefreshIcon />
+                Reset
+              </button>
+              <button className="btn" type="button" onClick={() => setStartOverConfirmOpen(false)}>
+                Cancel
               </button>
             </div>
-
-            {extractFailed ? (
-              <div className="error">
-                <div>Failed to extract values. Enter manually or try again.</div>
-                {extractMessage ? (
-                  <div className="muted" style={{ marginTop: 6, whiteSpace: 'pre-wrap' }}>
-                    {extractMessage.length > 800 ? `${extractMessage.slice(0, 800)}…` : extractMessage}
-                  </div>
-                ) : null}
-              </div>
-            ) : extractMessage ? (
-              <div className="muted" style={{ whiteSpace: 'pre-wrap' }}>
-                {extractMessage.length > 500 ? `${extractMessage.slice(0, 500)}…` : extractMessage}
-              </div>
-            ) : null}
-          </>
-        )}
-      </div>
-
-      <div className={`card stack${step3Done && !card3Open ? ' collapsed' : ''}`} style={{ opacity: step1Done ? 1 : 0.6 }}>
-        <button
-          className="row card-header-btn"
-          type="button"
-          onClick={() => {
-            if (!step1Done) return
-            card3Touched.current = true
-            setCard3Open((v) => !v)
-          }}
-        >
-          <strong>3) Vehicle{selectedVehicleName ? `: ${selectedVehicleName}` : ''}</strong>
-          {step3Done ? <DoneIcon /> : <span className="muted">Required</span>}
-        </button>
-
-        {step3Done && !card3Open ? null : !step1Done ? (
-          <div className="muted">Upload an invoice first.</div>
-        ) : busy ? (
-          <div className="muted">Loading vehicles…</div>
-        ) : (
-          <div className="vehicle-grid">
-            {vehicles.map((v) => {
-              const selected = draft.vehicleId === v.id
-              return (
-                <button
-                  key={v.id}
-                  className={`vehicle-card${selected ? ' selected' : ''}`}
-                  onClick={() => {
-                    vehicleTouched.current = true
-                    setDraft((d) => ({
-                      ...d,
-                      vehicleId: v.id,
-                      records: (d.records ?? []).map((r) =>
-                        typeof r.form.vehicleId === 'number' ? r : { ...r, form: { ...r.form, vehicleId: v.id } },
-                      ),
-                    }))
-                  }}
-                  disabled={submitBusy}
-                  type="button"
-                >
-                  {(() => {
-                    const parts = splitVehicleName(v.name)
-                    return (
-                      <div className="vehicle-name">
-                        {parts.year ? <div className="vehicle-year">{parts.year}</div> : null}
-                        <div className="vehicle-model">{parts.model}</div>
-                      </div>
-                    )
-                  })()}
-                </button>
-              )
-            })}
           </div>
-        )}
-      </div>
-
-      <div className={`card stack`} style={{ opacity: step1Done && step2Done ? 1 : 0.6 }}>
-        <div className="row">
-          <strong>4) Review</strong>
         </div>
+      ) : null}
 
-        {!hasRecords ? (
-          <div className="muted">No records have been extracted.</div>
-        ) : null}
+      <InvoiceStep
+        stepDone={step1Done}
+        open={card1Open}
+        onToggle={() => {
+          if (!step1Done) return
+          card1Touched.current = true
+          setCard1Open((v) => !v)
+        }}
+        previewUrl={previewUrl}
+        docBusy={docBusy}
+        submitBusy={submitBusy}
+        docCameraInputRef={docCameraInputRef}
+        docFileInputRef={docFileInputRef}
+        onDocumentChange={onDocumentChange}
+        selectedLabel={`${draft.document ? `Selected: ${draft.document.name}` : ''}${draft.document && draft.documentText ? ` (text extracted)` : ''}`}
+        doneIcon={<DoneIcon />}
+        cameraIcon={<CameraIcon />}
+        fileIcon={<FileIcon />}
+      />
 
-        {(draft.records ?? []).map((r, idx) => {
-          const required = requiredExtraFieldsFor(r.form.recordType)
-          const canSubmit = recordCanSubmit(r)
-          const datalistId = `extra-field-names-${r.id}`
-          const isSubmitted = r.status === 'submitted'
-          return (
-            <div key={r.id} className="card stack" style={{ padding: 14 }}>
-              <div className="row">
-                <strong>Record {idx + 1}</strong>
-                {isSubmitted ? <DoneIcon /> : <span className="muted">{r.status === 'failed' ? 'Needs attention' : 'Pending'}</span>}
-              </div>
+      <ExtractStep
+        step1Done={step1Done}
+        stepDone={step2Done}
+        open={card2Open}
+        extracting={extractBusy}
+        canExtractAny={canExtractAny}
+        submitBusy={submitBusy}
+        extractFailed={extractFailed}
+        extractMessage={extractMessage}
+        keepOpen={keepExtractOpen}
+        onToggle={() => {
+          if (!step1Done) return
+          if (!step2Done) return
+          card2Touched.current = true
+          setCard2Open((v) => !v)
+        }}
+        onRetry={() => {
+          setExtractFailed(false)
+          setExtractMessage(null)
+          lastExtractSigRef.current = ''
+          setForceExtractTick((n) => n + 1)
+          setDraft((d) => ({ ...d, extracted: undefined, records: undefined }))
+        }}
+        doneIcon={<DoneIcon />}
+        refreshIcon={<RefreshIcon />}
+      />
 
-              {r.submitError ? (
-                <div className="error" style={{ whiteSpace: 'pre-wrap' }}>
-                  {r.submitError}
-                </div>
-              ) : null}
+      <VehicleStep
+        step1Done={step1Done}
+        stepDone={step3Done}
+        open={card3Open}
+        anyInvalid={anyVehicleIdInvalid}
+        selectedVehicleName={selectedVehicleName}
+        vehicles={vehicles}
+        selectedVehicleId={draft.vehicleId}
+        anyVehicleWarning={anyVehicleIdWarning}
+        busy={busy}
+        submitBusy={submitBusy}
+        onToggle={() => {
+          if (!step1Done) return
+          card3Touched.current = true
+          setCard3Open((v) => !v)
+        }}
+        onSelectVehicle={(vehicleId) => {
+          vehicleTouched.current = true
+          setDraft((d) => ({
+            ...d,
+            vehicleId,
+            extracted:
+              d.extracted?.warnings?.length
+                ? { ...d.extracted, warnings: d.extracted.warnings.filter((w) => !/^\/records\/\d+\/vehicleId$/.test(w.path)) }
+                : d.extracted,
+            records: (d.records ?? []).map((r) => (typeof r.form.vehicleId === 'number' ? r : { ...r, form: { ...r.form, vehicleId } })),
+          }))
+        }}
+        splitVehicleName={splitVehicleName}
+        doneIcon={<DoneIcon />}
+      />
 
-              <div className="grid two no-collapse">
-                <div className="field">
-                  <label>Record type</label>
-                  <select
-                    value={r.form.recordType ?? ''}
-                    onChange={(e) => {
-                      updateRecord(r.id, (prev) => ({
-                        ...prev,
-                        recordTypeTouched: true,
-                        form: { ...prev.form, recordType: e.target.value as ServiceLikeRecordType },
-                      }))
-                    }}
-                    disabled={submitBusy || isSubmitted}
-                  >
-                    <option value="" disabled>
-                      Select…
-                    </option>
-                    <option value="service">Service</option>
-                    <option value="repair">Repair</option>
-                    <option value="upgrade">Upgrade</option>
-                  </select>
-                </div>
-                <div className="field">
-                  <label>Date</label>
-                  <input
-                    type="date"
-                    value={r.form.date ?? draft.date}
-                    onChange={(e) => updateRecord(r.id, (prev) => ({ ...prev, form: { ...prev.form, date: e.target.value } }))}
-                    disabled={submitBusy || isSubmitted}
-                  />
-                </div>
-              </div>
-
-              <div className="field">
-                <label>Odometer</label>
-                <input
-                  inputMode="numeric"
-                  value={numberOrEmpty(r.form.odometer)}
-                  onChange={(e) => {
-                    const n = Number(e.target.value)
-                    updateRecord(r.id, (prev) => ({ ...prev, form: { ...prev.form, odometer: Number.isFinite(n) ? n : undefined } }))
-                  }}
-                  disabled={submitBusy || isSubmitted}
-                />
-              </div>
-
-              <div className="field">
-                <label>Description</label>
-                <input
-                  value={r.form.description ?? ''}
-                  onChange={(e) => updateRecord(r.id, (prev) => ({ ...prev, form: { ...prev.form, description: e.target.value } }))}
-                  disabled={submitBusy || isSubmitted}
-                />
-              </div>
-
-              <div className="grid two no-collapse">
-                <div className="field">
-                  <label>Total cost</label>
-                  <input
-                    inputMode="decimal"
-                    value={numberOrEmpty(r.form.cost)}
-                    onChange={(e) => {
-                      const n = Number(e.target.value)
-                      updateRecord(r.id, (prev) => ({ ...prev, form: { ...prev.form, cost: Number.isFinite(n) ? n : undefined } }))
-                    }}
-                    disabled={submitBusy || isSubmitted}
-                  />
-                </div>
-                <div className="field">
-                  <label>Tags (optional)</label>
-                  <input
-                    value={r.form.tags ?? ''}
-                    onChange={(e) => updateRecord(r.id, (prev) => ({ ...prev, form: { ...prev.form, tags: e.target.value } }))}
-                    disabled={submitBusy || isSubmitted}
-                    placeholder="oilchange tires …"
-                  />
-                </div>
-              </div>
-
-              <div className="field">
-                <label>Notes (optional)</label>
-                <textarea
-                  rows={2}
-                  value={r.form.notes ?? ''}
-                  onChange={(e) => updateRecord(r.id, (prev) => ({ ...prev, form: { ...prev.form, notes: e.target.value } }))}
-                  disabled={submitBusy || isSubmitted}
-                />
-              </div>
-
-              <div className="card stack" style={{ padding: 14 }}>
-                <div className="row">
-                  <strong>Extra fields</strong>
-                  <button
-                    className="btn small"
-                    type="button"
-                    onClick={() => {
-                      updateRecord(r.id, (prev) => ({
-                        ...prev,
-                        form: { ...prev.form, extraFields: [...(prev.form.extraFields ?? []), { name: '', value: '' }] },
-                      }))
-                    }}
-                    disabled={submitBusy || isSubmitted}
-                  >
-                    Add
-                  </button>
-                </div>
-                {(r.form.extraFields ?? []).length === 0 ? <div className="muted">None</div> : null}
-                {(r.form.extraFields ?? []).map((ef, efIdx) => {
-                  const isReq = required.includes(ef.name)
-                  const missingRequired = isReq && !ef.value.trim()
-                  return (
-                    <div key={efIdx} className="grid two no-collapse" style={{ alignItems: 'flex-end' }}>
-                      <div className="field">
-                        <label>{isReq ? `Name (required)` : 'Name'}</label>
-                        <input
-                          value={ef.name}
-                          onChange={(e) => {
-                            updateRecord(r.id, (prev) => {
-                              const next = (prev.form.extraFields ?? []).slice()
-                              next[efIdx] = { ...ef, name: e.target.value }
-                              return { ...prev, form: { ...prev.form, extraFields: next } }
-                            })
-                          }}
-                          disabled={submitBusy || isSubmitted}
-                          list={datalistId}
-                        />
-                      </div>
-                      <div className="field">
-                        <label>{missingRequired ? 'Value (required)' : 'Value'}</label>
-                        <input
-                          value={ef.value}
-                          onChange={(e) => {
-                            updateRecord(r.id, (prev) => {
-                              const next = (prev.form.extraFields ?? []).slice()
-                              next[efIdx] = { ...ef, value: e.target.value }
-                              return { ...prev, form: { ...prev.form, extraFields: next } }
-                            })
-                          }}
-                          disabled={submitBusy || isSubmitted}
-                        />
-                      </div>
-                      <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
-                        <button
-                          className="btn small"
-                          type="button"
-                          onClick={() => {
-                            updateRecord(r.id, (prev) => {
-                              const next = (prev.form.extraFields ?? []).slice()
-                              next.splice(efIdx, 1)
-                              return { ...prev, form: { ...prev.form, extraFields: next } }
-                            })
-                          }}
-                          disabled={submitBusy || isSubmitted}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-                <datalist id={datalistId}>
-                  {(r.form.recordType
-                    ? extraFieldNamesByRecordType[mappedRecordType(r.form.recordType)] ?? []
-                    : []
-                  ).map((n) => (
-                    <option key={n} value={n} />
-                  ))}
-                </datalist>
-              </div>
-
-              <div className="actions">
-                <button
-                  className="btn primary"
-                  disabled={!canSubmit || submitBusy || extractBusy || docBusy || isSubmitted}
-                  onClick={() => onSubmitRecord(r.id)}
-                  type="button"
-                >
-                  {r.status === 'submitting' ? 'Submitting…' : isSubmitted ? 'Submitted' : 'Submit to LubeLogger'}
-                </button>
-              </div>
-            </div>
-          )
-        })}
-
-      </div>
-
-      <div className="actions">
-        <button
-          className="btn"
-          disabled={submitBusy || extractBusy || docBusy}
-          onClick={async () => {
-            await clearServiceDraft()
-            vehicleTouched.current = false
-            lastExtractSigRef.current = ''
-            setExtractFailed(false)
-            setExtractMessage(null)
-            setDraft({ date: todayISODate() })
-          }}
-          type="button"
-        >
-          Start over
-        </button>
-      </div>
+      <ReviewStep
+        step1Done={step1Done}
+        step2Done={step2Done}
+        hasRecords={hasRecords}
+        draftDate={draft.date}
+        records={draft.records ?? []}
+        submitBusy={submitBusy}
+        extractBusy={extractBusy}
+        docBusy={docBusy}
+        onStartOver={async () => {
+          const anySubmitted = (draft.records ?? []).some((r) => r.status === 'submitted')
+          const hasAnything =
+            Boolean(draft.document || draft.documentText || draft.documentImages?.length || draft.records?.length || draft.extracted)
+          if (!anySubmitted && hasAnything) {
+            setStartOverConfirmOpen(true)
+            return
+          }
+          await resetAll()
+        }}
+        numberOrEmpty={numberOrEmpty}
+        requiredExtraFieldsFor={requiredExtraFieldsFor}
+        recordCanSubmit={recordCanSubmit}
+        mappedRecordType={mappedRecordType}
+        extraFieldNamesByRecordType={extraFieldNamesByRecordType}
+        updateRecord={updateRecord}
+        updateRecordAndClearWarnings={updateRecordAndClearWarnings}
+        hasWarningForRecordField={hasWarningForRecordField}
+        onSubmitRecord={onSubmitRecord}
+        doneIcon={<DoneIcon />}
+      />
 
       {docBusy || extractBusy ? <div className="muted">{docBusy ? 'Processing document…' : 'Extracting from document…'}</div> : null}
     </div>

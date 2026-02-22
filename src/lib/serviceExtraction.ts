@@ -27,9 +27,18 @@ export const ServiceExtractionSchema = z.object({
   explanation: NullableTrimmedString.optional(),
 })
 
+const WarningReasonSchema = z.enum(['missing', 'guessed', 'uncertain', 'conflict'])
+
+export const ServiceExtractionWarningSchema = z.object({
+  path: z.string().min(1),
+  reason: WarningReasonSchema,
+  message: NullableTrimmedString.optional(),
+})
+
 export const ServiceExtractionResultSchema = z.object({
   records: z.array(ServiceExtractionSchema).min(1),
   explanation: NullableTrimmedString.optional(),
+  warnings: z.array(ServiceExtractionWarningSchema).optional(),
 })
 
 export type ServiceExtraction = z.infer<typeof ServiceExtractionSchema>

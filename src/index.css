@@ -4,6 +4,7 @@
   font-weight: 400;
   color: #e7eaf0;
   background-color: #0b1220;
+  color-scheme: dark;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -39,6 +40,15 @@ body {
 .modal {
   width: 100%;
   max-width: 520px;
+}
+
+.modal .card {
+  background: #0b1220;
+}
+
+/* Some modals use className="modal card" (same element), not ".modal .card". */
+.modal.card {
+  background: #0b1220;
 }
 
 a {
@@ -142,6 +152,11 @@ textarea {
   padding: 12px;
 }
 
+.card.invalid {
+  border-color: rgba(239, 68, 68, 0.55);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.18) inset;
+}
+
 @keyframes cardPulse {
   0% {
     box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
@@ -175,6 +190,33 @@ textarea {
   color: inherit;
   cursor: pointer;
   text-align: left;
+}
+
+.icon-btn {
+  background: none;
+  border: 0;
+  padding: 6px;
+  border-radius: 10px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.85;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  opacity: 1;
+}
+
+.icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.icon-btn:disabled:hover {
+  background: none;
 }
 
 .status-icon {
@@ -222,6 +264,12 @@ textarea {
 .vehicle-card.selected {
   border-color: rgba(37, 99, 235, 0.95);
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25) inset;
+}
+
+.vehicle-card.selected.warn,
+.vehicle-card.warn.selected {
+  border-color: rgba(245, 158, 11, 0.95);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25) inset;
 }
 
 .vehicle-thumb {
@@ -324,6 +372,20 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(0, 0, 0, 0.18);
   color: inherit;
+}
+
+.field.warn input,
+.field.warn select,
+.field.warn textarea {
+  border-color: rgba(245, 158, 11, 0.7);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.14) inset;
+}
+
+.field.invalid input,
+.field.invalid select,
+.field.invalid textarea {
+  border-color: rgba(239, 68, 68, 0.65);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.16) inset;
 }
 
 .btn {
@@ -456,6 +518,116 @@ textarea {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+.llm-order-item {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+:root[data-theme='light'] {
+  color: #0f172a;
+  background-color: #f8fafc;
+  color-scheme: light;
+}
+
+:root[data-theme='light'] .modal-overlay {
+  background: rgba(15, 23, 42, 0.55);
+}
+
+:root[data-theme='light'] .top-nav {
+  border-color: rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+:root[data-theme='light'] .card {
+  background: rgba(15, 23, 42, 0.03);
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+:root[data-theme='light'] .modal .card {
+  background: #ffffff;
+}
+
+:root[data-theme='light'] .modal.card {
+  background: #ffffff;
+}
+
+.extra-fields-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: nowrap;
+}
+
+.extra-fields-row .field {
+  flex: 1 1 0;
+}
+
+:root[data-theme='light'] .vehicle-card {
+  border-color: rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.75);
+}
+
+:root[data-theme='light'] .vehicle-thumb {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+:root[data-theme='light'] .field input,
+:root[data-theme='light'] .field select,
+:root[data-theme='light'] .field textarea {
+  border-color: rgba(15, 23, 42, 0.2);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+:root[data-theme='light'] .btn:not(.primary):not(.success) {
+  border-color: rgba(15, 23, 42, 0.18);
+  background: rgba(15, 23, 42, 0.06);
+}
+
+:root[data-theme='light'] .btn.primary,
+:root[data-theme='light'] .btn.success {
+  color: #ffffff;
+}
+
+:root[data-theme='light'] .icon-btn:hover {
+  background: rgba(15, 23, 42, 0.08);
+}
+
+:root[data-theme='light'] .badge {
+  border-color: rgba(15, 23, 42, 0.18);
+  background: rgba(255, 255, 255, 0.75);
+}
+
+:root[data-theme='light'] .image-preview {
+  border-color: rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.75);
+}
+
+:root[data-theme='light'] .image-overlay {
+  background: rgba(15, 23, 42, 0.55);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+:root[data-theme='light'] .image-split-btn {
+  background: rgba(15, 23, 42, 0.08);
+}
+
+:root[data-theme='light'] .image-split-btn + .image-split-btn {
+  border-left-color: rgba(15, 23, 42, 0.14);
+}
+
+:root[data-theme='light'] .llm-order-item {
+  border-color: rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.75);
+}
+
+:root[data-theme='light'] .error {
+  color: #7f1d1d;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.4);
 }
 
 .image-preview img {

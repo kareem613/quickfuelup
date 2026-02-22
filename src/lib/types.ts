@@ -1,11 +1,14 @@
 export type LlmProvider = 'gemini' | 'anthropic'
 
+export type ThemePreference = 'system' | 'light' | 'dark'
+
 export type AppConfig = {
   baseUrl: string
   lubeLoggerApiKey: string
   cultureInvariant: boolean
   // When false/undefined, sold vehicles are hidden from pickers.
   showSoldVehicles?: boolean
+  uiTheme?: ThemePreference
   useProxy: boolean
   llm: {
     providerOrder: LlmProvider[]
@@ -75,13 +78,23 @@ export type ServiceRecordExtraction = {
 export type ServiceExtractionResult = {
   records: ServiceRecordExtraction[]
   explanation?: string | null // overall grouping notes / caveats
+  warnings?: ServiceExtractionWarning[]
   rawJson?: unknown
+}
+
+export type ServiceExtractionWarningReason = 'missing' | 'guessed' | 'uncertain' | 'conflict'
+
+export type ServiceExtractionWarning = {
+  path: string
+  reason: ServiceExtractionWarningReason
+  message?: string | null
 }
 
 export type ServiceDraftRecord = {
   id: string
   vehicleTouched?: boolean
   recordTypeTouched?: boolean
+  validationAttempted?: boolean
   status?: 'pending' | 'submitting' | 'submitted' | 'failed'
   submitError?: string
   extracted?: ServiceRecordExtraction

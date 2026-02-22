@@ -93,6 +93,7 @@ export async function extractServiceFromDocument(params: {
   documentText?: string
   vehicles: { id: number; name: string }[]
   extraFieldNamesByRecordType?: Record<string, string[]>
+  onThinking?: (message: string) => void
 }) {
   const genAI = new GoogleGenerativeAI(params.apiKey)
   const modelNames = [
@@ -116,29 +117,34 @@ export async function extractServiceFromDocument(params: {
     : '(not provided)'
 
   const prompt = `
-You will be given a vehicle service invoice/receipt as text and/or images.
+ You will be given a vehicle service invoice/receipt as text and/or images.
 
-Your job is to create a sensible set of LubeLogger records from this document.
-This is NOT necessarily one record per line item: group logically into records that represent one service event/visit.
+ Your job is to create a sensible set of LubeLogger records from this document.
+ This is NOT necessarily one record per line item: group logically into records that represent one service event/visit.
 
-Return JSON ONLY matching this TypeScript type:
-{
-  "records": Array<{
-    "recordType": "service" | "repair" | "upgrade" | null,
-    "vehicleId": number | null,
-    "date": string | null,          // yyyy-mm-dd (preferred). If unknown, null.
-    "odometer": number | null,      // integer miles/km
-    "description": string | null,   // VERY concise summary (e.g. "AC repair", "Oil change")
-    "totalCost": number | null,     // best estimate for that record's cost
-    "notes"?: string | null,
-    "tags"?: string | null,
-    "extraFields"?: { "name": string, "value": string }[] | null,
-    "explanation"?: string | null
-  }>,
-  "explanation"?: string | null
-}
+ Return JSON ONLY matching this TypeScript type:
+ {
+   "records": Array<{
+     "recordType": "service" | "repair" | "upgrade" | null,
+     "vehicleId": number | null,
+     "date": string | null,          // yyyy-mm-dd (preferred). If unknown, null.
+     "odometer": number | null,      // integer miles/km
+     "description": string | null,   // VERY concise summary (e.g. "AC repair", "Oil change")
+     "totalCost": number | null,     // best estimate for that record's cost
+     "notes"?: string | null,
+     "tags"?: string | null,
+     "extraFields"?: { "name": string, "value": string }[] | null,
+     "explanation"?: string | null
+   }>,
+   "explanation"?: string | null,
+   "warnings"?: Array<{
+     "path": string, // e.g. "/records/0/odometer"
+     "reason": "missing" | "guessed" | "uncertain" | "conflict",
+     "message"?: string | null
+   }>
+ }
 
-Available vehicles (pick one vehicleId if confident; otherwise null):
+Available vehicles (pick one vehicleId if confident OR if you can make a reasonable educated guess; otherwise null):
 ${vehiclesText}
 
 Configured LubeLogger extra fields by record type (prefer these names if they match):
@@ -147,13 +153,17 @@ ${extraFieldsText}
 Document text (may be empty for scanned PDFs):
 ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(none)'}
 
- Rules:
- - Return only valid JSON (no markdown, no backticks).
- - Use '.' as decimal separator.
- - If you choose a recordType, choose the one that best matches the work (service=scheduled maintenance, repair=unplanned fix, upgrade=enhancement).
- - Create between 1 and 8 records; prefer fewer records unless there are clearly distinct visits/dates/vehicles.
- - Do not produce a record for every part.
- - Keep "description" VERY concise (2-6 words). Put the detailed work performed (parts/labor/steps) in "notes".
+  Rules:
+  - Return only valid JSON (no markdown, no backticks).
+  - Use '.' as decimal separator.
+  - Still make your best educated guess when the document strongly suggests a value (e.g. vehicleId from invoice header). Only use null when you truly cannot determine a value.
+  - If any value is missing (null), guessed, uncertain, or conflicting, include a warning in "warnings" for that field.
+    - Use paths like: /records/<index>/<fieldName> (e.g. /records/0/vehicleId, /records/0/odometer, /records/1/totalCost).
+    - Keep warning messages short and user-friendly.
+  - If you choose a recordType, choose the one that best matches the work (service=scheduled maintenance, repair=unplanned fix, upgrade=enhancement).
+  - Create between 1 and 8 records; prefer fewer records unless there are clearly distinct visits/dates/vehicles.
+  - Do not produce a record for every part.
+  - Keep "description" VERY concise (2-6 words). Put the detailed work performed (parts/labor/steps) in "notes".
    Example: description="AC repair", notes="Evacuated/recharged system; replaced condenser; replaced O-rings; leak test; added dye."
  - Cost math (do this when the invoice is itemized and shows subtotal/tax/total):
    - Treat EVERY charge as a line item amount that must be counted: parts, labor, fees, shop supplies, discounts/credits (negative), etc.
@@ -173,7 +183,10 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
     try {
       const model = genAI.getGenerativeModel({
         model: name,
-        generationConfig: { responseMimeType: 'application/json' },
+        generationConfig: (params.onThinking
+          ? // Thought summaries (Gemini thinking docs): parts with { thought: true }.
+            ({ thinkingConfig: { includeThoughts: true } } as unknown)
+          : { responseMimeType: 'application/json' }) as never,
       })
 
       const parts: unknown[] = [{ text: prompt }]
@@ -183,8 +196,50 @@ ${params.documentText?.trim() ? params.documentText.trim().slice(0, 12000) : '(n
         })
       }
 
-      const result = await model.generateContent(parts as never)
-      const text = result.response.text().trim()
+      let text = ''
+      if (params.onThinking) {
+        const streamed = await model.generateContentStream(parts as never)
+        let answer = ''
+        let lastThoughtSent = ''
+
+        function summarizeThoughtLine(raw: string) {
+          const firstLine = raw
+            .split('\n')
+            .map((l) => l.trim())
+            .find((l) => Boolean(l))
+          if (!firstLine) return null
+          const heading = firstLine.match(/^\*\*([^*].*?)\*\*$/)
+          if (heading) return heading[1]?.trim() || null
+          // If it looks like an incomplete heading, wait for more.
+          if (firstLine.startsWith('**') && !firstLine.endsWith('**')) return null
+          return firstLine
+        }
+
+        for await (const chunk of streamed.stream) {
+          const c0 = (chunk as unknown as { candidates?: Array<{ content?: { parts?: unknown[] } }> }).candidates?.[0]
+          const chunkParts = c0?.content?.parts ?? []
+          for (const p of chunkParts) {
+            if (typeof p !== 'object' || p === null) continue
+            const obj = p as Record<string, unknown>
+            if (typeof obj.text !== 'string' || !obj.text) continue
+            if (obj.thought === true) {
+              // Thought summaries come as distinct "thought" parts; show only a single headline line.
+              const line = summarizeThoughtLine(obj.text)
+              if (line && line !== lastThoughtSent) {
+                lastThoughtSent = line
+                params.onThinking(line)
+              }
+            } else {
+              answer += obj.text
+            }
+          }
+        }
+        text = answer.trim()
+      } else {
+        const result = await model.generateContent(parts as never)
+        text = result.response.text().trim()
+      }
+
       const json = parseJsonFromText(text, 'Gemini did not return JSON')
       const parsed = ServiceExtractionResultSchema.safeParse(json)
       if (!parsed.success) throw new Error(`Gemini response did not match schema: ${text}`)

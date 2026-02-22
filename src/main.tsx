@@ -5,6 +5,8 @@ import './index.css'
 import App from './App.tsx'
 import { registerSW } from 'virtual:pwa-register'
 import { setupPwaInstallCapture } from './lib/pwaInstall'
+import { loadConfig } from './lib/config'
+import { applyThemePreference, loadThemePreference } from './lib/theme'
 
 const updateSW = registerSW({
   immediate: true,
@@ -20,6 +22,8 @@ const updateSW = registerSW({
   },
 })
 setupPwaInstallCapture()
+
+applyThemePreference(loadConfig()?.uiTheme ?? loadThemePreference())
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

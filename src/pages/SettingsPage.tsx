@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import TopNav from '../components/TopNav'
-import { loadConfig, saveConfig } from '../lib/config'
+import { loadConfig, normalizeConfigFromUnknown, saveConfig } from '../lib/config'
+import { decryptTokenToConfigJson, encryptConfigToToken, isShareCryptoSupported } from '../lib/shareConfig'
 import type { AppConfig, LlmProvider } from '../lib/types'
 import { getDeferredPrompt, isPwaInstallEnabled, isRunningStandalone, setDeferredPrompt, setPwaInstallEnabled } from '../lib/pwaInstall'
+import { applyThemePreference, loadThemePreference, saveThemePreference } from '../lib/theme'
+import type { ThemePreference } from '../lib/types'
 
 function safeStringify(value: unknown) {
   try {
@@ -39,6 +42,7 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, ms:
 
 export default function SettingsPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const existing = useMemo(() => loadConfig(), [])
   const [baseUrl, setBaseUrl] = useState(existing?.baseUrl ?? '')
   const [lubeLoggerApiKey, setLubeLoggerApiKey] = useState(existing?.lubeLoggerApiKey ?? '')
@@ -63,10 +67,22 @@ export default function SettingsPage() {
   const closePickerTimer = useRef<number | null>(null)
   const [cultureInvariant, setCultureInvariant] = useState(existing?.cultureInvariant ?? true)
   const [showSoldVehicles, setShowSoldVehicles] = useState(existing?.showSoldVehicles ?? false)
+  const [uiTheme, setUiTheme] = useState<ThemePreference>(() => existing?.uiTheme ?? loadThemePreference())
   const [testResult, setTestResult] = useState<string | null>(null)
   const [busyTest, setBusyTest] = useState(false)
   const [connectedAs, setConnectedAs] = useState<{ username: string; isAdmin: boolean } | null>(null)
   const [installPromptReady, setInstallPromptReady] = useState(Boolean(getDeferredPrompt()))
+  const [shareModalOpen, setShareModalOpen] = useState(false)
+  const [sharePasscode, setSharePasscode] = useState('')
+  const [shareLink, setShareLink] = useState<string | null>(null)
+  const [shareError, setShareError] = useState<string | null>(null)
+  const [shareBusy, setShareBusy] = useState(false)
+  const [importModalOpen, setImportModalOpen] = useState(false)
+  const [importToken, setImportToken] = useState<string | null>(null)
+  const [importPasscode, setImportPasscode] = useState('')
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importNotice, setImportNotice] = useState<string | null>(null)
+  const [pendingImport, setPendingImport] = useState<AppConfig | null>(null)
   const activeProviders = useMemo(() => {
     const keyFor = (p: LlmProvider) => (p === 'anthropic' ? anthropicApiKey.trim() : geminiApiKey.trim())
     const ordered = providerOrder.filter((p) => keyFor(p))
@@ -77,6 +93,16 @@ export default function SettingsPage() {
   useEffect(() => {
     document.title = 'QuickFillUp - Settings'
   }, [])
+
+  useEffect(() => {
+    const t = new URLSearchParams(location.search).get('cfg')
+    setImportToken(t)
+    setImportModalOpen(Boolean(t))
+    setImportError(null)
+    setImportNotice(null)
+    setPendingImport(null)
+    setImportPasscode('')
+  }, [location.search])
 
   useEffect(() => {
     const onAny = () => setInstallPromptReady(Boolean(getDeferredPrompt()))
@@ -97,6 +123,7 @@ export default function SettingsPage() {
           lubeLoggerApiKey: lubeLoggerApiKey.trim(),
           cultureInvariant,
           showSoldVehicles,
+          uiTheme,
           useProxy: false,
           llm: {
             providerOrder: activeProviders,
@@ -113,8 +140,93 @@ export default function SettingsPage() {
               ? { anthropicModelService: normalizeModelInput(anthropicModelService) }
               : null),
            },
-         }
-       : null
+          }
+        : null
+
+  function applyConfigToForm(next: AppConfig) {
+    setBaseUrl(next.baseUrl ?? '')
+    setLubeLoggerApiKey(next.lubeLoggerApiKey ?? '')
+    setCultureInvariant(next.cultureInvariant ?? true)
+    setShowSoldVehicles(Boolean(next.showSoldVehicles))
+    if (next.uiTheme) {
+      setUiTheme(next.uiTheme)
+      saveThemePreference(next.uiTheme)
+      applyThemePreference(next.uiTheme)
+    }
+    const orderRaw = next.llm?.providerOrder ?? (['gemini', 'anthropic'] as const)
+    setProviderOrder(Array.from(new Set(orderRaw.filter((p) => p === 'gemini' || p === 'anthropic'))) as LlmProvider[])
+    setGeminiApiKey(next.llm?.geminiApiKey ?? '')
+    setAnthropicApiKey(next.llm?.anthropicApiKey ?? '')
+    setGeminiModelFuel(next.llm?.geminiModelFuel ?? '')
+    setGeminiModelService(next.llm?.geminiModelService ?? '')
+    setAnthropicModelFuel(next.llm?.anthropicModelFuel ?? '')
+    setAnthropicModelService(next.llm?.anthropicModelService ?? '')
+  }
+
+  function clearImportTokenFromUrl() {
+    const params = new URLSearchParams(location.search)
+    params.delete('cfg')
+    const nextSearch = params.toString()
+    navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : '' }, { replace: true })
+  }
+
+  async function onDecryptImport() {
+    if (!importToken) return
+    if (!importPasscode.trim()) {
+      setImportError('Enter the passcode.')
+      return
+    }
+    setImportError(null)
+    setImportNotice(null)
+    setPendingImport(null)
+    try {
+      const decrypted = await decryptTokenToConfigJson(importToken, importPasscode.trim())
+      const normalized = normalizeConfigFromUnknown(decrypted)
+      if (!normalized) throw new Error('Decrypted settings were not recognized by this app version.')
+
+      if (loadConfig()) {
+        setPendingImport(normalized)
+        setImportNotice(null)
+        return
+      }
+
+      saveConfig(normalized)
+      applyConfigToForm(normalized)
+      setImportNotice('Imported settings applied.')
+      clearImportTokenFromUrl()
+      setImportModalOpen(false)
+    } catch (e) {
+      setImportError(e instanceof Error ? e.message : 'Failed to decrypt.')
+    }
+  }
+
+  async function onGenerateShareLink() {
+    if (!cfg) {
+      setShareError('Fill in Base URL and API key first.')
+      return
+    }
+    if (!isShareCryptoSupported()) {
+      setShareError('Sharing requires a modern browser with WebCrypto support.')
+      return
+    }
+    if (!sharePasscode.trim()) {
+      setShareError('Enter a passcode.')
+      return
+    }
+    setShareBusy(true)
+    setShareError(null)
+    try {
+      // Do not share UI theme preference; keep it local to the device.
+      const token = await encryptConfigToToken({ ...cfg, uiTheme: undefined }, sharePasscode.trim())
+      const url = new URL('/settings', window.location.origin)
+      url.searchParams.set('cfg', token)
+      setShareLink(url.toString())
+    } catch (e) {
+      setShareError(e instanceof Error ? e.message : 'Failed to generate share link.')
+    } finally {
+      setShareBusy(false)
+    }
+  }
 
   function resolveWhoamiUrl() {
     if (!cfg) return null
@@ -231,6 +343,14 @@ export default function SettingsPage() {
     if (!cfg) return
     saveConfig(cfg)
     navigate('/new')
+  }
+
+  function onSetTheme(next: ThemePreference) {
+    setUiTheme(next)
+    saveThemePreference(next)
+    applyThemePreference(next)
+    const existingCfg = loadConfig()
+    if (existingCfg) saveConfig({ ...existingCfg, uiTheme: next })
   }
 
   function providerLabel(p: LlmProvider) {
@@ -414,6 +534,229 @@ export default function SettingsPage() {
       <h2 style={{ margin: 0 }}>Settings</h2>
 
       <div className="card stack">
+        <strong>UI settings</strong>
+        <div className="field">
+          <label>Theme</label>
+          <select
+            value={uiTheme}
+            onChange={(e) => {
+              const v = e.target.value
+              if (v === 'system' || v === 'dark' || v === 'light') onSetTheme(v)
+            }}
+          >
+            <option value="system">System</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </div>
+        <div className="muted">System follows your device theme.</div>
+      </div>
+
+      {importToken && importModalOpen ? (
+        <div
+          className="modal-overlay"
+          onMouseDown={(e) => {
+            if (e.target !== e.currentTarget) return
+            setPendingImport(null)
+            setImportModalOpen(false)
+            clearImportTokenFromUrl()
+          }}
+        >
+          <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="card stack">
+              <div className="row" style={{ justifyContent: 'space-between', gap: 10 }}>
+                <strong>Import shared settings</strong>
+                <button
+                  className="btn small"
+                  type="button"
+                  onClick={() => {
+                    setPendingImport(null)
+                    setImportModalOpen(false)
+                    clearImportTokenFromUrl()
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+
+              {!isShareCryptoSupported() ? (
+                <div className="muted">Import requires a modern browser with WebCrypto support.</div>
+              ) : (
+                <>
+                  {pendingImport ? (
+                    <div className="card stack" style={{ padding: 10 }}>
+                      <div className="muted">
+                        Existing settings were found on this device. Overwrite all existing settings?
+                      </div>
+                      <div className="actions">
+                        <button
+                          className="btn primary"
+                          type="button"
+                          onClick={() => {
+                            saveConfig(pendingImport)
+                            applyConfigToForm(pendingImport)
+                            setPendingImport(null)
+                            setImportModalOpen(false)
+                            clearImportTokenFromUrl()
+                          }}
+                        >
+                          Overwrite all
+                        </button>
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={() => {
+                            setPendingImport(null)
+                            setImportModalOpen(false)
+                            clearImportTokenFromUrl()
+                          }}
+                        >
+                          Keep mine
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                       <div className="muted">
+                        This link contains encrypted AppConfig settings only (no drafts or other flags). UI theme is not
+                        shared.
+                       </div>
+                      <div className="field">
+                        <label>Passcode</label>
+                        <input
+                          type="text"
+                          value={importPasscode}
+                          onChange={(e) => setImportPasscode(e.target.value)}
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          spellCheck={false}
+                        />
+                      </div>
+                      <div className="actions">
+                        <button
+                          className="btn primary"
+                          type="button"
+                          onClick={onDecryptImport}
+                          disabled={!importPasscode.trim()}
+                        >
+                          Decrypt
+                        </button>
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={() => {
+                            setPendingImport(null)
+                            setImportModalOpen(false)
+                            clearImportTokenFromUrl()
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+              {importError ? <div className="error">{importError}</div> : null}
+              {importNotice ? <div className="muted">{importNotice}</div> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {shareModalOpen ? (
+        <div
+          className="modal-overlay"
+          onMouseDown={(e) => {
+            if (e.target !== e.currentTarget) return
+            setShareModalOpen(false)
+          }}
+        >
+          <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="card stack">
+              <div className="row" style={{ justifyContent: 'space-between', gap: 10 }}>
+                <strong>Share settings</strong>
+                <button className="btn small" type="button" onClick={() => setShareModalOpen(false)}>
+                  Close
+                </button>
+              </div>
+
+              {!isShareCryptoSupported() ? (
+                <div className="muted">Sharing requires a modern browser with WebCrypto support.</div>
+              ) : (
+                <>
+                  <div className="muted">
+                    Warning: This does not give them your LubeLogger login, but it does share your LubeLogger API key—so
+                    anyone you share this with can create/edit records via the API (editor-level access).
+                  </div>
+                  <div className="muted">Use a long passcode; anyone with the link can attempt offline guessing.</div>
+                  <div className="field">
+                    <label>Passcode</label>
+                    <input
+                      type="text"
+                      value={sharePasscode}
+                      onChange={(e) => {
+                        setSharePasscode(e.target.value)
+                        setShareLink(null)
+                        setShareError(null)
+                      }}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+                  </div>
+                  <div className="actions">
+                    <button className="btn primary" type="button" onClick={onGenerateShareLink} disabled={!cfg || shareBusy}>
+                      {shareBusy ? 'Generating…' : 'Generate link'}
+                    </button>
+                    {shareLink ? (
+                      <button
+                        className="btn"
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(shareLink)
+                            setShareError(null)
+                          } catch {
+                            setShareError('Could not copy to clipboard.')
+                          }
+                        }}
+                      >
+                        Copy link
+                      </button>
+                    ) : null}
+                    {shareLink && typeof navigator.share === 'function' ? (
+                      <button
+                        className="btn"
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await navigator.share({ url: shareLink, title: 'QuickFillUp settings' })
+                            setShareError(null)
+                          } catch {
+                            // user canceled or share failed
+                          }
+                        }}
+                      >
+                        Share…
+                      </button>
+                    ) : null}
+                  </div>
+                  {shareLink ? (
+                    <div className="field">
+                      <label>Link</label>
+                      <input value={shareLink} readOnly />
+                    </div>
+                  ) : null}
+                </>
+              )}
+              {shareError ? <div className="error">{shareError}</div> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="card stack">
         <div className="field">
           <label>LubeLogger Base URL</label>
           <input
@@ -454,23 +797,13 @@ export default function SettingsPage() {
         <div className="field">
           <label>LLM order</label>
           <div className="stack" style={{ gap: 8 }}>
-            {activeProviders.length ? (
-              activeProviders.map((p, idx) => (
-              <div
-                key={p}
-                className="row"
-                style={{
-                  padding: '8px 10px',
-                  borderRadius: 10,
-                  border: '1px solid rgba(255, 255, 255, 0.14)',
-                  background: 'rgba(0, 0, 0, 0.18)',
-                }}
-                aria-label={`LLM priority ${idx + 1}: ${providerLabel(p)}`}
-              >
-                <strong>
-                  {idx + 1}. {providerLabel(p)}
-                </strong>
-                <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                {activeProviders.length ? (
+                  activeProviders.map((p, idx) => (
+               <div key={p} className="row llm-order-item" aria-label={`LLM priority ${idx + 1}: ${providerLabel(p)}`}>
+                 <strong>
+                   {idx + 1}. {providerLabel(p)}
+                 </strong>
+                 <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
                   <button className="btn small" type="button" disabled={idx === 0} onClick={() => moveProvider(idx, idx - 1)}>
                     ↑
                   </button>
@@ -697,23 +1030,40 @@ export default function SettingsPage() {
           </div>
         ) : null}
 
-        {isPwaInstallEnabled() && !isRunningStandalone() && installPromptReady ? (
-          <button
-            className="btn"
-            type="button"
-            onClick={async () => {
-              const p = getDeferredPrompt()
-              if (!p) return
-              await p.prompt()
-              try {
-                await p.userChoice
-              } finally {
-                setDeferredPrompt(null)
-              }
-            }}
-          >
-            Install app
-          </button>
+        {isPwaInstallEnabled() ? (
+          <div className="actions">
+            {isPwaInstallEnabled() && !isRunningStandalone() && installPromptReady ? (
+              <button
+                className="btn"
+                type="button"
+                onClick={async () => {
+                  const p = getDeferredPrompt()
+                  if (!p) return
+                  await p.prompt()
+                  try {
+                    await p.userChoice
+                  } finally {
+                    setDeferredPrompt(null)
+                  }
+                }}
+              >
+                Install app
+              </button>
+            ) : null}
+
+            <button
+              className="btn"
+              type="button"
+              onClick={() => {
+                setShareModalOpen(true)
+                setShareError(null)
+                setShareLink(null)
+              }}
+              disabled={!cfg || busyTest}
+            >
+              Share settings
+            </button>
+          </div>
         ) : null}
 
         {testResult && <div className={testResult.startsWith('OK') ? 'card' : 'error'}>{testResult}</div>}

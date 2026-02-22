@@ -59,6 +59,7 @@ export async function extractServiceFromDocumentWithFallback(params: {
   documentText?: string
   vehicles: { id: number; name: string }[]
   extraFieldNamesByRecordType?: Record<string, string[]>
+  onThinking?: (message: string) => void
 }) {
   const providers = params.providers.filter((p) => p.apiKey.trim())
   if (providers.length === 0) throw new Error('No LLM API keys configured (Settings).')
@@ -67,6 +68,7 @@ export async function extractServiceFromDocumentWithFallback(params: {
   for (const p of providers) {
     try {
       if (p.provider === 'anthropic') {
+        const onThinking = params.onThinking ? (m: string) => params.onThinking?.(`Anthropic: ${m}`) : undefined
         const extracted = await extractServiceFromDocumentAnthropic({
           apiKey: p.apiKey,
           model: p.model,
@@ -74,11 +76,13 @@ export async function extractServiceFromDocumentWithFallback(params: {
           documentText: params.documentText,
           vehicles: params.vehicles,
           extraFieldNamesByRecordType: params.extraFieldNamesByRecordType,
+          onThinking,
         })
         const parsed = ServiceExtractionResultSchema.safeParse(extracted)
         if (!parsed.success) throw new Error(`Anthropic response did not match schema: ${JSON.stringify(extracted)}`)
         return extracted
       }
+      const onThinking = params.onThinking ? (m: string) => params.onThinking?.(`Gemini: ${m}`) : undefined
       const extracted = await extractServiceFromDocument({
         apiKey: p.apiKey,
         model: p.model,
@@ -86,6 +90,7 @@ export async function extractServiceFromDocumentWithFallback(params: {
         documentText: params.documentText,
         vehicles: params.vehicles,
         extraFieldNamesByRecordType: params.extraFieldNamesByRecordType,
+        onThinking,
       })
       const parsed = ServiceExtractionResultSchema.safeParse(extracted)
       if (!parsed.success) throw new Error(`Gemini response did not match schema: ${JSON.stringify(extracted)}`)
