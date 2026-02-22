@@ -71,10 +71,9 @@ export default function SettingsPage() {
   const [showSoldVehicles, setShowSoldVehicles] = useState(existing?.showSoldVehicles ?? false)
   const [uiTheme, setUiTheme] = useState<ThemePreference>(() => existing?.uiTheme ?? loadThemePreference())
   const [llmDebugEnabled, setLlmDebugEnabled] = useState(Boolean(existing?.llmDebugEnabled))
-  const [geminiOpen, setGeminiOpen] = useState(() => Boolean(geminiApiKey.trim() || geminiModelFuel.trim() || geminiModelService.trim()))
-  const [anthropicOpen, setAnthropicOpen] = useState(() =>
-    Boolean(anthropicApiKey.trim() || anthropicModelFuel.trim() || anthropicModelService.trim()),
-  )
+  // If a provider is already configured, keep it collapsed by default.
+  const [geminiOpen, setGeminiOpen] = useState(() => !geminiApiKey.trim())
+  const [anthropicOpen, setAnthropicOpen] = useState(() => !anthropicApiKey.trim())
   const [testResult, setTestResult] = useState<string | null>(null)
   const [busyTest, setBusyTest] = useState(false)
   const [connectedAs, setConnectedAs] = useState<{ username: string; isAdmin: boolean } | null>(null)
