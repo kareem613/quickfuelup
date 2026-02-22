@@ -568,7 +568,7 @@ export default function NewServiceRecordPage() {
     const invalid = pending.some((r) => !recordCanSubmit(r))
     if (invalid) {
       if (pending.some((r) => typeof r.form.vehicleId !== 'number')) setCard3Open(true)
-      setError('Some records have missing or invalid fields.')
+      setError(null)
       setDraft((d) => ({
         ...d,
         records: (d.records ?? []).map((r) => (r.status === 'submitted' ? r : { ...r, validationAttempted: true })),
