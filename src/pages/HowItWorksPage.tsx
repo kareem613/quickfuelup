@@ -30,7 +30,7 @@ export default function HowItWorksPage(props: { onDismiss?: () => void }) {
       <TopNav />
 
       <div className="card stack">
-        <h3 style={{ margin: 0 }}>Welcome 👋</h3>
+        <h3 style={{ margin: 0 }}>Welcome to track fuel and service costs for your car 👋</h3>
         <div className="muted">
           QuickFillUp is a small web app that helps you log fuel fill-ups and service records to your LubeLogger
           instance faster, using AI to pre-fill forms.
